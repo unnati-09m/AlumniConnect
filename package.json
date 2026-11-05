@@ -1,0 +1,23 @@
+{
+  "name": "alumniconnect",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -k -n API,WEB \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "db:setup": "npm --prefix server run db:setup",
+    "seed": "npm --prefix server run seed",
+    "test": "npm --prefix server run test:smoke",
+    "build": "npm --prefix client run build",
+    "start": "node server/src/index.js",
+    "start:with-migrations": "node server/src/setup.js && node server/src/index.js",
+    "check": "node --check server/src/index.js && node --check server/src/seed.js && npm --prefix client run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": { "node": ">=20" }
+}
