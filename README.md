@@ -207,3 +207,5 @@ All routes follow consistent `{ message, data }` patterns.
 | `npm test` | Run smoke tests (requires running server) |
 | `npm run build` | Build the React frontend |
 | `npm start` | Start production server |
+
+Commit 1: Added alumni directory UI stub
