@@ -209,3 +209,6 @@ All routes follow consistent `{ message, data }` patterns.
 | `npm start` | Start production server |
 
 Commit 1: Added alumni directory UI stub
+
+Commit 2: Minor UI tweak
+Update README for 5‑day commit
