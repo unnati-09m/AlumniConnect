@@ -40,16 +40,18 @@ async function run() {
   const newStudent=await ok('/auth/register','', 'POST',{
     name:'Smoke Student',email:'smoke.student.'+suffix+'@example.test',password:'Testing@123',
     role:'student',student_id:'SMOKE-'+suffix,department:'Computer Science',degree:'B.Tech',current_year:'Third Year',graduation_year:2027,
-    skills:['JavaScript'],interests:['Mentorship']
+    skills:['JavaScript'],interests:['Mentorship'],career_interests:['Full Stack Engineering'],bio:'Aspiring software engineer.'
   });
   const student=newStudent.token;
   assert.equal(newStudent.user.role,'student');
   const profile=await ok('/profile',student);
   assert.equal(profile.student_id,'SMOKE-'+suffix);
-  await ok('/profile',student,'PUT',{department:'Information Technology'});
+  assert.equal(profile.bio,'Aspiring software engineer.');
+  await ok('/profile',student,'PUT',{department:'Information Technology',bio:'Updated student bio.'});
   const updated=await ok('/profile',student);
   assert.equal(updated.student_id,'SMOKE-'+suffix,'partial profile update preserves other fields');
   assert.equal(updated.department,'Information Technology');
+  assert.equal(updated.bio,'Updated student bio.');
 
   const alumniProfile=await ok('/profile',alumni);
   const directory=await ok('/alumni',student);
