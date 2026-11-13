@@ -160,11 +160,22 @@ alumniconnect/
 
 ---
 
-## 👥 Team Structure
+## 👥 Team Structure & Module Allocation
 
-| Module | Developer | Branch |
-|--------|-----------|--------|
-| Auth + Student + Foundation | Unnati | `feat/unnati-core-student` |
+This platform is developed collaboratively with clear separation of responsibilities:
+
+| Module | Developer | Branch | Status / Responsibility |
+|--------|-----------|--------|-------------------------|
+| **Auth + Student + Foundation** | **Unnati** | `feat/unnati-core-student` | **Lead Foundation**: Authentication, session persistence, role authorization, student onboarding, student dashboard, full DB schema, Express app core, responsive SPA shell. |
+| **Alumni Directory & Career** | **Arshiyan** | `feat/arshiyan-alumni-career` | Alumni directory search & filter, professional profiles, career history, opportunity posting & student application management, CSV export. |
+| **Engagement & Admin** | **Nayan Jyoti** | `feat/nayan-engagement-admin` | Mentorship request lifecycle, events & registrations, notifications inbox, announcements broadcast, alumni verification, donation pledge tracking, reports. |
+
+### Team Integration Guidelines
+- All developers build on the shared foundation established in `feat/unnati-core-student`.
+- **Database**: The complete relational schema is centralized in `server/src/schema.sql`.
+- **Authentication**: All protected endpoints use `authenticate`, `requireActive`, and `allowRoles('student', 'alumni', 'admin')` from `server/src/auth.js`.
+- **API Convention**: Every JSON endpoint returns either `{ message, data }` or the created/updated resource directly with standard HTTP status codes (`200`, `201`, `400`, `401`, `403`, `404`, `409`, `500`).
+- **Feature Modules**: Each feature area is contained within its own router in `server/src/routes/` and mounted in `server/src/index.js`.
 
 ---
 
