@@ -209,3 +209,5 @@ All routes follow consistent `{ message, data }` patterns.
 | `npm start` | Start production server |
 
 # Contribution marker
+
+<!-- trigger contributor update -->
