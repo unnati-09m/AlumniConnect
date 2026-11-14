@@ -28,11 +28,17 @@ router.patch('/users/:id/status', auth, active, roles('admin'), asyncRoute(async
   if (!['active', 'suspended'].includes(status)) {
     return res.status(400).json({ message: 'Status must be active or suspended.' });
   }
+
+  // Prevent an admin from suspending or modifying their own admin account
+  if (req.user.id === Number(req.params.id)) {
+    return res.status(400).json({ message: 'Administrators cannot modify or suspend their own account status.' });
+  }
+
   const result = await pool.query(
     "UPDATE users SET status=$1 WHERE id=$2 AND role<>'admin' RETURNING id,name,email,role,status",
     [status, req.params.id]
   );
-  if (!result.rows[0]) return res.status(404).json({ message: 'User not found or cannot be changed.' });
+  if (!result.rows[0]) return res.status(404).json({ message: 'User not found or cannot be modified by administrator.' });
   res.json(result.rows[0]);
 }));
 
@@ -42,26 +48,51 @@ router.patch('/users/:id/verification', auth, active, roles('admin'), asyncRoute
   if (!['approve', 'reject'].includes(decision)) {
     return res.status(400).json({ message: 'Decision must be approve or reject.' });
   }
-  const user = (await pool.query('SELECT id,role FROM users WHERE id=$1', [req.params.id])).rows[0];
-  if (!user || user.role !== 'alumni') {
-    return res.status(404).json({ message: 'Pending alumni account not found.' });
+
+  // Prevent an admin from verifying/altering self or invalid accounts
+  if (req.user.id === Number(req.params.id)) {
+    return res.status(400).json({ message: 'You cannot perform verification on your own administrator account.' });
   }
-  if (user.role === 'alumni') {
-    await pool.query(
-      'UPDATE alumni_profiles SET is_verified=$1,verification_notes=$2 WHERE user_id=$3',
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const user = (await client.query('SELECT id,role,status FROM users WHERE id=$1', [req.params.id])).rows[0];
+    if (!user || user.role !== 'alumni') {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Pending alumni account not found. Verification applies to alumni accounts only.' });
+    }
+
+    await client.query(
+      'UPDATE alumni_profiles SET is_verified=$1,verification_notes=$2,updated_at=NOW() WHERE user_id=$3',
       [decision === 'approve', text(req.body.notes), user.id]
     );
+
+    const newStatus = decision === 'approve' ? 'active' : 'suspended';
+    await client.query(
+      'UPDATE users SET status=$1 WHERE id=$2',
+      [newStatus, user.id]
+    );
+
+    await client.query(
+      'INSERT INTO notifications (user_id,title,body) VALUES ($1,$2,$3)',
+      [
+        user.id,
+        'Account verification update',
+        decision === 'approve'
+          ? 'Your alumni account has been approved by the institution administrator. Welcome to AlumniConnect!'
+          : 'Your alumni account was not approved. Please contact your institution administrator for details.'
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Account ' + (decision === 'approve' ? 'approved' : 'rejected') + ' successfully.', status: newStatus });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-  await pool.query(
-    'UPDATE users SET status=$1 WHERE id=$2',
-    [decision === 'approve' ? 'active' : 'suspended', user.id]
-  );
-  await notify(
-    user.id,
-    'Account verification update',
-    decision === 'approve' ? 'Your account has been approved.' : 'Your account was not approved. Please contact the institution.'
-  );
-  res.json({ message: 'Account ' + (decision === 'approve' ? 'approved' : 'rejected') + ' successfully.' });
 }));
 
 // GET /reports — aggregated institution report metrics

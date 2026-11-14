@@ -579,11 +579,146 @@ function DonationSupport({form,setForm,run}) {
   return <section className="panel form-panel"><div className="panel-heading"><div><span className="eyebrow">SUPPORT YOUR INSTITUTION</span><h3>Record a pledge of support</h3><p>This records an expression of interest for institutional follow-up. No payment is collected in this application.</p></div></div><form className="form-stack narrow-form" onSubmit={async e=>{e.preventDefault();const ok=await run('/donation-pledges','POST',form);if(ok)setForm({amount:'',purpose:'',note:''});}}><Field label="Pledge amount (₹)" type="number" value={form.amount} onChange={v=>set('amount',v)} required placeholder="Enter amount"/><Field label="Purpose" value={form.purpose} onChange={v=>set('purpose',v)} required placeholder="Scholarships, labs, student activities…"/><Field label="Additional note" rows={3} value={form.note} onChange={v=>set('note',v)}/><button className="primary-btn">Submit pledge interest <HeartHandshake size={16}/></button></form></section>;
 }
 function UserManagement({items,run}) {
-  const pending=items.filter(x=>x.status==='pending');
-  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">ACCESS AND VERIFICATION</span><h3>Community accounts</h3><p>Approve alumni registrations and manage community access.</p></div><span className="count-chip">{pending.length} pending</span></div>{items.length?<div className="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Registered</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.name}</strong><small>{item.email}</small>{item.department&&<small>{item.department} {item.graduation_year?'· '+item.graduation_year:''}</small>}</td><td>{pretty(item.role)}</td><td>{dateText(item.created_at)}</td><td><span className={'status-pill '+item.status}>{pretty(item.status)}</span></td><td><div className="table-actions">{item.role==='alumni'&&item.status==='pending'?<><button className="primary-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/verification','PATCH',{decision:'approve'})}>Approve</button><button className="outline-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/verification','PATCH',{decision:'reject'})}>Reject</button></>:item.role!=='admin'&&<button className="outline-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/status','PATCH',{status:item.status==='active'?'suspended':'active'})}>{item.status==='active'?'Suspend':'Reactivate'}</button>}</div></td></tr>)}</tbody></table></div>:<Empty title="No accounts found" detail="Registered community accounts will appear here."/>}</section>;
+  const [tab, setTab] = useState('all');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const pending = items.filter(x => x.status === 'pending');
+  const displayed = tab === 'pending' ? pending : items;
+
+  return <section className="panel">
+    <div className="panel-heading">
+      <div>
+        <span className="eyebrow">ACCESS AND VERIFICATION</span>
+        <h3>Community accounts</h3>
+        <p>Review student and alumni accounts, verify alumni records, and manage access.</p>
+      </div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+        <button className={tab==='all'?'primary-btn small':'outline-btn small'} onClick={()=>setTab('all')}>All accounts ({items.length})</button>
+        <button className={tab==='pending'?'primary-btn small':'outline-btn small'} onClick={()=>setTab('pending')}>
+          Pending verification <span className="count-chip" style={{marginLeft:'6px'}}>{pending.length}</span>
+        </button>
+      </div>
+    </div>
+    {displayed.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Role</th>
+              <th>Academic / Company</th>
+              <th>Registered</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map(item => (
+              <tr key={item.id}>
+                <td>
+                  <strong>{item.name}</strong>
+                  <small>{item.email}</small>
+                </td>
+                <td>{pretty(item.role)}</td>
+                <td>
+                  {item.department ? <small>{item.department} {item.graduation_year ? '· Class of ' + item.graduation_year : ''}</small> : <small className="muted">—</small>}
+                  {item.company ? <div><small>{item.company}</small></div> : null}
+                </td>
+                <td>{dateText(item.created_at)}</td>
+                <td>
+                  <span className={'status-pill ' + item.status}>{pretty(item.status)}</span>
+                </td>
+                <td>
+                  <div className="table-actions">
+                    {item.role === 'alumni' && item.status === 'pending' ? (
+                      <>
+                        <button className="primary-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'approve' })}>Approve</button>
+                        <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'reject' })}>Reject</button>
+                      </>
+                    ) : item.role !== 'admin' ? (
+                      <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/status', 'PATCH', { status: item.status === 'active' ? 'suspended' : 'active' })}>
+                        {item.status === 'active' ? 'Suspend' : 'Reactivate'}
+                      </button>
+                    ) : (
+                      <span className="muted" style={{fontSize:'12px'}}>Admin account</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <Empty title={tab==='pending'?'No pending verifications':'No accounts found'} detail={tab==='pending'?'All submitted alumni accounts have been verified.':'Registered community accounts will appear here.'} />
+    )}
+  </section>;
 }
 function DonationTracking({items,run}) {
-  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">ALUMNI GIVING</span><h3>Pledge interests</h3><p>Track alumni pledge records and institutional follow-up status.</p></div></div>{items.length?<div className="table-wrap"><table><thead><tr><th>Alumnus</th><th>Amount</th><th>Purpose</th><th>Date</th><th>Status</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.alumni_name}</strong><small>{item.email}</small></td><td>₹{Number(item.amount).toLocaleString('en-IN')}</td><td>{item.purpose}<small>{item.note}</small></td><td>{dateText(item.created_at)}</td><td><select value={item.status} onChange={e=>run('/donation-pledges/'+item.id,'PATCH',{status:e.target.value})}>{['interested','contacted','fulfilled','withdrawn'].map(v=><option key={v}>{v}</option>)}</select></td></tr>)}</tbody></table></div>:<Empty title="No pledge records yet" detail="Alumni pledge interests will appear here."/>}</section>;
+  const [filter, setFilter] = useState('all');
+  const filtered = filter === 'all' ? items : items.filter(x => x.status === filter);
+  const totalPledged = items.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+
+  return <section className="panel">
+    <div className="panel-heading">
+      <div>
+        <span className="eyebrow">ALUMNI GIVING</span>
+        <h3>Pledge interests</h3>
+        <p>Track alumni pledge records and institutional follow-up status. Total expressed interest: ₹{totalPledged.toLocaleString('en-IN')}</p>
+      </div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+        <select value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="all">All statuses ({items.length})</option>
+          {['interested','contacted','fulfilled','withdrawn'].map(s => <option key={s} value={s}>{pretty(s)}</option>)}
+        </select>
+      </div>
+    </div>
+    {filtered.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Alumnus</th>
+              <th>Amount</th>
+              <th>Purpose & Notes</th>
+              <th>Pledged on</th>
+              <th>Follow-up Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(item => (
+              <tr key={item.id}>
+                <td>
+                  <strong>{item.alumni_name}</strong>
+                  <small>{item.email}</small>
+                </td>
+                <td>
+                  <strong style={{color:'var(--accent-color, #2563eb)'}}>₹{Number(item.amount).toLocaleString('en-IN')}</strong>
+                </td>
+                <td>
+                  <strong>{item.purpose}</strong>
+                  {item.note && <small>{item.note}</small>}
+                </td>
+                <td>{dateText(item.created_at)}</td>
+                <td>
+                  <select
+                    className="status-select"
+                    value={item.status}
+                    onChange={e => run('/donation-pledges/' + item.id, 'PATCH', { status: e.target.value })}
+                  >
+                    {['interested','contacted','fulfilled','withdrawn'].map(v => (
+                      <option key={v} value={v}>{pretty(v)}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <Empty title="No pledge records found" detail="Alumni pledge expressions of interest will appear here." />
+    )}
+  </section>;
 }
 function Reports({data,download}) {
   if(!data)return <Empty title="Reports are unavailable" detail="Check the database connection and refresh this page."/>;
