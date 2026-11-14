@@ -1,0 +1,5 @@
+{
+  "rewrites": [{ "source": "/api/(.*)", "destination": "https://your-render-service.onrender.com/api/$1" }],
+  "buildCommand": "npm --prefix client install && npm --prefix client run build",
+  "outputDirectory": "client/dist"
+}
