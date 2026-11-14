@@ -55,3 +55,83 @@ const notifyAdmins = async (title, body) => {
     console.error('notifyAdmins() failed:', err.message);
   }
 };
+
+// ---------------------------------------------------------------------------
+// POST / — alumni records a donation pledge interest
+// ---------------------------------------------------------------------------
+router.post(
+  '/',
+  auth,
+  active,
+  roles('alumni'),
+  asyncRoute(async (req, res) => {
+    const amount = Number(req.body.amount);
+    const purpose = text(req.body.purpose);
+    const note = text(req.body.note);
+
+    if (!(amount > 0) || !Number.isFinite(amount)) {
+      return res
+        .status(400)
+        .json({ message: 'Amount must be a valid positive number.' });
+    }
+    if (!purpose) {
+      return res
+        .status(400)
+        .json({ message: 'Purpose is required for a donation pledge.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO donation_pledges (alumni_id, amount, purpose, note)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [req.user.id, amount, purpose, note]
+    );
+
+    const pledge = result.rows[0];
+
+    await notifyAdmins(
+      'New donation pledge interest',
+      `${req.user.name} expressed a pledge interest of ₹${amount} for "${purpose}".`
+    );
+
+    return res.status(201).json(pledge);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /mine — alumni views their own pledge history
+// ---------------------------------------------------------------------------
+router.get(
+  '/mine',
+  auth,
+  active,
+  roles('alumni'),
+  asyncRoute(async (req, res) => {
+    const result = await pool.query(
+      `SELECT * FROM donation_pledges
+       WHERE alumni_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    return res.json(result.rows);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET / — admin lists all donation pledges
+// ---------------------------------------------------------------------------
+router.get(
+  '/',
+  auth,
+  active,
+  roles('admin'),
+  asyncRoute(async (_req, res) => {
+    const result = await pool.query(
+      `SELECT d.*, u.name AS alumni_name, u.email
+       FROM donation_pledges d
+       JOIN users u ON u.id = d.alumni_id
+       ORDER BY d.created_at DESC`
+    );
+    return res.json(result.rows);
+  })
+);
