@@ -1,5 +1,5 @@
 /**
- * Events and registrations routes — owned by Arshiyan (Nayan's reassigned work).
+ * Events and registrations routes — owned by Nayan.
  *
  * Endpoints:
  *   GET    /api/events               — list all events with attendee count + registration status
