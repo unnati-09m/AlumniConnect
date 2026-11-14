@@ -6,9 +6,14 @@ import {
   Network, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X
 } from 'lucide-react';
 
+// Backend API Base URL (uses environment variable if defined, otherwise defaults to relative /api)
 const API = (import.meta.env.VITE_API_URL || '') + '/api';
 const DEMO_PASSWORD = 'Demo@123';
 
+/**
+ * request helper:
+ * Sends an HTTP request to the backend with JSON headers and Authorization Bearer token.
+ */
 export async function request(path, token, options = {}) {
   const response = await fetch(API + path, {
     ...options,
@@ -18,16 +23,39 @@ export async function request(path, token, options = {}) {
       ...(options.headers || {})
     }
   });
-  const type = response.headers.get('content-type') || '';
-  const data = type.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(typeof data === 'string' ? data : data.message || 'Request failed.');
+
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const errorMessage = typeof data === 'string' ? data : (data.message || 'Request failed.');
+    throw new Error(errorMessage);
+  }
+
   return data;
 }
 
-const initials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-const dateText = value => value ? new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
-const dateTimeText = value => value ? new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : 'Not set';
-const pretty = value => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+// Format user's name initials for the circular avatar (e.g. "Priya Sharma" -> "PS")
+const initials = (name = '') => {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+};
+
+// Format timestamps into clean human-readable date strings (e.g. "14 Nov 2026")
+const dateText = (value) => {
+  if (!value) return 'Not set';
+  return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// Format timestamps into readable date + time (e.g. "14 Nov, 3:30 PM")
+const dateTimeText = (value) => {
+  if (!value) return 'Not set';
+  return new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+};
+
+// Formats role or status strings by replacing underscores with spaces and capitalizing words
+const pretty = (value) => {
+  return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 function Field({ label, value, onChange, type = 'text', required = false, placeholder = '', options, rows = 0 }) {
   return <label className="field"><span>{label}</span>
