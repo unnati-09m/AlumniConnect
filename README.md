@@ -216,4 +216,4 @@ All routes follow consistent `{ message, data }` patterns.
 
 <!-- Mohammad contribution marker -->
 
-<!-- Mohammad additional contribution marker 1 -->
+<!-- Nayan contribution marker -->
