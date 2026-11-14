@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: alumniconnect
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm --prefix server install && npm --prefix client install && npm run build
+    startCommand: node server/src/setup.js && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
