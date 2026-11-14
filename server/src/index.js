@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
@@ -84,8 +84,8 @@ app.get('/api/dashboard', auth, asyncRoute(async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/alumni', alumniRoutes);
-app.use('/api/opportunities', opportunitiesRoutes);
-app.use('/api', opportunitiesRoutes);
+app.use('/api/opportunities', opportunitiesRoutes); // Opportunities CRUD
+app.use('/api', opportunitiesRoutes); // Mounts /my-applications, /managed-applications, /applications/:id/status
 app.use('/api/mentorship', mentorshipRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/notifications', notificationsRoutes);

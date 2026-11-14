@@ -6,9 +6,14 @@ import {
   Network, Plus, Search, Settings, ShieldCheck, Sparkles, Users, X
 } from 'lucide-react';
 
+// Backend API Base URL (uses environment variable if defined, otherwise defaults to relative /api)
 const API = (import.meta.env.VITE_API_URL || '') + '/api';
 const DEMO_PASSWORD = 'Demo@123';
 
+/**
+ * request helper:
+ * Sends an HTTP request to the backend with JSON headers and Authorization Bearer token.
+ */
 export async function request(path, token, options = {}) {
   const response = await fetch(API + path, {
     ...options,
@@ -18,16 +23,39 @@ export async function request(path, token, options = {}) {
       ...(options.headers || {})
     }
   });
-  const type = response.headers.get('content-type') || '';
-  const data = type.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(typeof data === 'string' ? data : data.message || 'Request failed.');
+
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const errorMessage = typeof data === 'string' ? data : (data.message || 'Request failed.');
+    throw new Error(errorMessage);
+  }
+
   return data;
 }
 
-const initials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-const dateText = value => value ? new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
-const dateTimeText = value => value ? new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : 'Not set';
-const pretty = value => String(value || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+// Format user's name initials for the circular avatar (e.g. "Priya Sharma" -> "PS")
+const initials = (name = '') => {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+};
+
+// Format timestamps into clean human-readable date strings (e.g. "14 Nov 2026")
+const dateText = (value) => {
+  if (!value) return 'Not set';
+  return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// Format timestamps into readable date + time (e.g. "14 Nov, 3:30 PM")
+const dateTimeText = (value) => {
+  if (!value) return 'Not set';
+  return new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+};
+
+// Formats role or status strings by replacing underscores with spaces and capitalizing words
+const pretty = (value) => {
+  return String(value || '').replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 function Field({ label, value, onChange, type = 'text', required = false, placeholder = '', options, rows = 0 }) {
   return <label className="field"><span>{label}</span>
@@ -302,9 +330,11 @@ function AuthScreen({authMode,setAuthMode,login,setLogin,register,setRegister,si
           <Field label="Email address" type="email" value={register.email} onChange={v=>set('email',v)} required/>
           <Field label="Password (minimum 8 characters)" type="password" value={register.password} onChange={v=>set('password',v)} required/>
           {register.role==='student'&&<>
-            <div className="form-two"><Field label="Student ID" value={register.student_id} onChange={v=>set('student_id',v)}/><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/></div>
-            <div className="form-two"><Field label="Degree" value={register.degree} onChange={v=>set('degree',v)}/><Field label="Current year" value={register.current_year} onChange={v=>set('current_year',v)} placeholder="e.g. Third Year"/></div>
-            <Field label="Expected graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)}/>
+            <div className="form-two"><Field label="Student ID" value={register.student_id} onChange={v=>set('student_id',v)} required/><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/></div>
+            <div className="form-two"><Field label="Degree" value={register.degree} onChange={v=>set('degree',v)} required placeholder="e.g. B.Tech / B.E."/><Field label="Current academic year" value={register.current_year} onChange={v=>set('current_year',v)} required placeholder="e.g. 3rd Year"/></div>
+            <Field label="Expected graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)} placeholder="e.g. 2026"/>
+            <Field label="Skills (comma-separated, optional)" value={register.skills || ''} onChange={v=>set('skills',v)} placeholder="e.g. JavaScript, Python, React"/>
+            <Field label="Interests & Bio (optional)" rows={2} value={register.bio || ''} onChange={v=>set('bio',v)} placeholder="Tell the community about your goals…"/>
           </>}
           {register.role==='alumni'&&<>
             <div className="form-two"><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/><Field label="Graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)} required/></div>
@@ -577,11 +607,146 @@ function DonationSupport({form,setForm,run}) {
   return <section className="panel form-panel"><div className="panel-heading"><div><span className="eyebrow">SUPPORT YOUR INSTITUTION</span><h3>Record a pledge of support</h3><p>This records an expression of interest for institutional follow-up. No payment is collected in this application.</p></div></div><form className="form-stack narrow-form" onSubmit={async e=>{e.preventDefault();const ok=await run('/donation-pledges','POST',form);if(ok)setForm({amount:'',purpose:'',note:''});}}><Field label="Pledge amount (₹)" type="number" value={form.amount} onChange={v=>set('amount',v)} required placeholder="Enter amount"/><Field label="Purpose" value={form.purpose} onChange={v=>set('purpose',v)} required placeholder="Scholarships, labs, student activities…"/><Field label="Additional note" rows={3} value={form.note} onChange={v=>set('note',v)}/><button className="primary-btn">Submit pledge interest <HeartHandshake size={16}/></button></form></section>;
 }
 function UserManagement({items,run}) {
-  const pending=items.filter(x=>x.status==='pending');
-  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">ACCESS AND VERIFICATION</span><h3>Community accounts</h3><p>Approve alumni registrations and manage community access.</p></div><span className="count-chip">{pending.length} pending</span></div>{items.length?<div className="table-wrap"><table><thead><tr><th>Member</th><th>Role</th><th>Registered</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.name}</strong><small>{item.email}</small>{item.department&&<small>{item.department} {item.graduation_year?'· '+item.graduation_year:''}</small>}</td><td>{pretty(item.role)}</td><td>{dateText(item.created_at)}</td><td><span className={'status-pill '+item.status}>{pretty(item.status)}</span></td><td><div className="table-actions">{item.role==='alumni'&&item.status==='pending'?<><button className="primary-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/verification','PATCH',{decision:'approve'})}>Approve</button><button className="outline-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/verification','PATCH',{decision:'reject'})}>Reject</button></>:item.role!=='admin'&&<button className="outline-btn tiny" onClick={()=>run('/admin/users/'+item.id+'/status','PATCH',{status:item.status==='active'?'suspended':'active'})}>{item.status==='active'?'Suspend':'Reactivate'}</button>}</div></td></tr>)}</tbody></table></div>:<Empty title="No accounts found" detail="Registered community accounts will appear here."/>}</section>;
+  const [tab, setTab] = useState('all');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const pending = items.filter(x => x.status === 'pending');
+  const displayed = tab === 'pending' ? pending : items;
+
+  return <section className="panel">
+    <div className="panel-heading">
+      <div>
+        <span className="eyebrow">ACCESS AND VERIFICATION</span>
+        <h3>Community accounts</h3>
+        <p>Review student and alumni accounts, verify alumni records, and manage access.</p>
+      </div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+        <button className={tab==='all'?'primary-btn small':'outline-btn small'} onClick={()=>setTab('all')}>All accounts ({items.length})</button>
+        <button className={tab==='pending'?'primary-btn small':'outline-btn small'} onClick={()=>setTab('pending')}>
+          Pending verification <span className="count-chip" style={{marginLeft:'6px'}}>{pending.length}</span>
+        </button>
+      </div>
+    </div>
+    {displayed.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Role</th>
+              <th>Academic / Company</th>
+              <th>Registered</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map(item => (
+              <tr key={item.id}>
+                <td>
+                  <strong>{item.name}</strong>
+                  <small>{item.email}</small>
+                </td>
+                <td>{pretty(item.role)}</td>
+                <td>
+                  {item.department ? <small>{item.department} {item.graduation_year ? '· Class of ' + item.graduation_year : ''}</small> : <small className="muted">—</small>}
+                  {item.company ? <div><small>{item.company}</small></div> : null}
+                </td>
+                <td>{dateText(item.created_at)}</td>
+                <td>
+                  <span className={'status-pill ' + item.status}>{pretty(item.status)}</span>
+                </td>
+                <td>
+                  <div className="table-actions">
+                    {item.role === 'alumni' && item.status === 'pending' ? (
+                      <>
+                        <button className="primary-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'approve' })}>Approve</button>
+                        <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'reject' })}>Reject</button>
+                      </>
+                    ) : item.role !== 'admin' ? (
+                      <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/status', 'PATCH', { status: item.status === 'active' ? 'suspended' : 'active' })}>
+                        {item.status === 'active' ? 'Suspend' : 'Reactivate'}
+                      </button>
+                    ) : (
+                      <span className="muted" style={{fontSize:'12px'}}>Admin account</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <Empty title={tab==='pending'?'No pending verifications':'No accounts found'} detail={tab==='pending'?'All submitted alumni accounts have been verified.':'Registered community accounts will appear here.'} />
+    )}
+  </section>;
 }
 function DonationTracking({items,run}) {
-  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">ALUMNI GIVING</span><h3>Pledge interests</h3><p>Track alumni pledge records and institutional follow-up status.</p></div></div>{items.length?<div className="table-wrap"><table><thead><tr><th>Alumnus</th><th>Amount</th><th>Purpose</th><th>Date</th><th>Status</th></tr></thead><tbody>{items.map(item=><tr key={item.id}><td><strong>{item.alumni_name}</strong><small>{item.email}</small></td><td>₹{Number(item.amount).toLocaleString('en-IN')}</td><td>{item.purpose}<small>{item.note}</small></td><td>{dateText(item.created_at)}</td><td><select value={item.status} onChange={e=>run('/donation-pledges/'+item.id,'PATCH',{status:e.target.value})}>{['interested','contacted','fulfilled','withdrawn'].map(v=><option key={v}>{v}</option>)}</select></td></tr>)}</tbody></table></div>:<Empty title="No pledge records yet" detail="Alumni pledge interests will appear here."/>}</section>;
+  const [filter, setFilter] = useState('all');
+  const filtered = filter === 'all' ? items : items.filter(x => x.status === filter);
+  const totalPledged = items.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+
+  return <section className="panel">
+    <div className="panel-heading">
+      <div>
+        <span className="eyebrow">ALUMNI GIVING</span>
+        <h3>Pledge interests</h3>
+        <p>Track alumni pledge records and institutional follow-up status. Total expressed interest: ₹{totalPledged.toLocaleString('en-IN')}</p>
+      </div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+        <select value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="all">All statuses ({items.length})</option>
+          {['interested','contacted','fulfilled','withdrawn'].map(s => <option key={s} value={s}>{pretty(s)}</option>)}
+        </select>
+      </div>
+    </div>
+    {filtered.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Alumnus</th>
+              <th>Amount</th>
+              <th>Purpose & Notes</th>
+              <th>Pledged on</th>
+              <th>Follow-up Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(item => (
+              <tr key={item.id}>
+                <td>
+                  <strong>{item.alumni_name}</strong>
+                  <small>{item.email}</small>
+                </td>
+                <td>
+                  <strong style={{color:'var(--accent-color, #2563eb)'}}>₹{Number(item.amount).toLocaleString('en-IN')}</strong>
+                </td>
+                <td>
+                  <strong>{item.purpose}</strong>
+                  {item.note && <small>{item.note}</small>}
+                </td>
+                <td>{dateText(item.created_at)}</td>
+                <td>
+                  <select
+                    className="status-select"
+                    value={item.status}
+                    onChange={e => run('/donation-pledges/' + item.id, 'PATCH', { status: e.target.value })}
+                  >
+                    {['interested','contacted','fulfilled','withdrawn'].map(v => (
+                      <option key={v} value={v}>{pretty(v)}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <Empty title="No pledge records found" detail="Alumni pledge expressions of interest will appear here." />
+    )}
+  </section>;
 }
 function Reports({data,download}) {
   if(!data)return <Empty title="Reports are unavailable" detail="Check the database connection and refresh this page."/>;

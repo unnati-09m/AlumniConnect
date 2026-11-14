@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.js';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
 
