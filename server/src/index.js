@@ -85,6 +85,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/alumni', alumniRoutes);
 app.use('/api/opportunities', opportunitiesRoutes);
+app.use('/api', opportunitiesRoutes);
 app.use('/api/mentorship', mentorshipRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/notifications', notificationsRoutes);
