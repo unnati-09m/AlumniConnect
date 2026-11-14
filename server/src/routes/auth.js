@@ -19,18 +19,39 @@ const notifyAdmins = async (title, body) => {
   for (const admin of admins.rows) await notify(admin.id, title, body);
 };
 
-// POST / — register a new student or alumni account
-router.post('/', asyncRoute(async (req, res) => {
+const registerHandler = asyncRoute(async (req, res) => {
   const name = text(req.body.name);
   const email = text(req.body.email).toLowerCase();
   const password = req.body.password;
   const role = req.body.role || 'student';
+
   if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 8) {
     return res.status(400).json({ message: 'Enter a valid name, email and password of at least 8 characters.' });
   }
   if (!['student', 'alumni'].includes(role)) {
     return res.status(400).json({ message: 'Public registration is available for students and alumni only. Admin accounts are provisioned by the institution.' });
   }
+
+  // Student specific required field validation
+  if (role === 'student') {
+    const studentId = text(req.body.student_id);
+    const department = text(req.body.department);
+    const degree = text(req.body.degree);
+    const currentYear = text(req.body.current_year);
+    if (!studentId || !department || !degree || !currentYear) {
+      return res.status(400).json({ message: 'Student ID, department, degree and current academic year are required for student registration.' });
+    }
+  }
+
+  // Alumni specific required field validation
+  if (role === 'alumni') {
+    const department = text(req.body.department);
+    const graduationYear = req.body.graduation_year;
+    if (!department || !graduationYear) {
+      return res.status(400).json({ message: 'Department and graduation year are required for alumni registration.' });
+    }
+  }
+
   const status = role === 'student' ? 'active' : 'pending';
   const hash = await bcrypt.hash(password, 12);
   const client = await pool.connect();
@@ -44,12 +65,32 @@ router.post('/', asyncRoute(async (req, res) => {
     if (role === 'student') {
       await client.query(
         'INSERT INTO student_profiles (user_id,student_id,department,degree,current_year,graduation_year,skills,interests,career_interests,bio) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [user.id, text(req.body.student_id), text(req.body.department), text(req.body.degree), text(req.body.current_year), req.body.graduation_year || null, Array.isArray(req.body.skills) ? req.body.skills : [], Array.isArray(req.body.interests) ? req.body.interests : [], Array.isArray(req.body.career_interests) ? req.body.career_interests : [], text(req.body.bio)]
+        [
+          user.id,
+          text(req.body.student_id),
+          text(req.body.department),
+          text(req.body.degree),
+          text(req.body.current_year),
+          req.body.graduation_year ? Number(req.body.graduation_year) : null,
+          Array.isArray(req.body.skills) ? req.body.skills : (typeof req.body.skills === 'string' && req.body.skills.trim() ? req.body.skills.split(',').map(s => s.trim()).filter(Boolean) : []),
+          Array.isArray(req.body.interests) ? req.body.interests : (typeof req.body.interests === 'string' && req.body.interests.trim() ? req.body.interests.split(',').map(s => s.trim()).filter(Boolean) : []),
+          Array.isArray(req.body.career_interests) ? req.body.career_interests : (typeof req.body.career_interests === 'string' && req.body.career_interests.trim() ? req.body.career_interests.split(',').map(s => s.trim()).filter(Boolean) : []),
+          text(req.body.bio)
+        ]
       );
     } else if (role === 'alumni') {
       await client.query(
         'INSERT INTO alumni_profiles (user_id,graduation_year,department,degree,company,job_title,location,linkedin_url,is_verified) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE)',
-        [user.id, Number(req.body.graduation_year) || new Date().getFullYear(), text(req.body.department) || 'Not specified', text(req.body.degree), text(req.body.company), text(req.body.job_title), text(req.body.location), text(req.body.linkedin_url)]
+        [
+          user.id,
+          Number(req.body.graduation_year) || new Date().getFullYear(),
+          text(req.body.department) || 'Not specified',
+          text(req.body.degree),
+          text(req.body.company),
+          text(req.body.job_title),
+          text(req.body.location),
+          text(req.body.linkedin_url)
+        ]
       );
     }
     await client.query('COMMIT');
@@ -60,7 +101,12 @@ router.post('/', asyncRoute(async (req, res) => {
     if (error.code === '23505') return res.status(409).json({ message: 'An account with this email already exists.' });
     throw error;
   } finally { client.release(); }
-}));
+});
+
+// Canonical registration endpoint: POST /register
+router.post('/register', registerHandler);
+// Backward-compatible alias: POST /
+router.post('/', registerHandler);
 
 // POST /login — authenticate and return JWT
 router.post('/login', asyncRoute(async (req, res) => {

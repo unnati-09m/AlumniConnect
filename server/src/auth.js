@@ -16,7 +16,8 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ message: 'This account is no longer active. Please contact your institution.' });
     }
     req.user.status = account.rows[0].status;
-    if (req.user.status === 'pending' && req.path !== '/api/auth/me') {
+    const isMeEndpoint = req.originalUrl?.split('?')[0] === '/api/auth/me' || req.path === '/me' || req.path === '/api/auth/me';
+    if (req.user.status === 'pending' && !isMeEndpoint) {
       return res.status(403).json({ message: 'Your account is awaiting institution verification.' });
     }
     next();

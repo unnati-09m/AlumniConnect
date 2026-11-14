@@ -143,11 +143,55 @@ async function run() {
     role:'alumni',department:'Computer Science',graduation_year:2025,company:'New Company'
   });
   assert.equal(pending.user.status,'pending');
+  assert.ok(pending.token, 'pending alumni receives token');
+
+  // Verify pending alumni can access /auth/me after refresh
+  const pendingMe = await ok('/auth/me', pending.token);
+  assert.equal(pendingMe.status, 'pending');
+  assert.equal(pendingMe.email, 'smoke.alumni.'+suffix+'@example.test');
+
+  // Verify pending alumni cannot access protected features
+  const pendingAccessForbidden = await call('/profile', pending.token);
+  assert.equal(pendingAccessForbidden.response.status, 403, 'pending alumni blocked from protected features');
+
+  // Verify duplicate email is rejected with 409
+  const duplicateSignup = await call('/auth/register', '', 'POST', {
+    name: 'Duplicate Student', email: 'smoke.student.'+suffix+'@example.test', password: 'Testing@123',
+    role: 'student', student_id: 'DUP-1', department: 'CS', degree: 'B.Tech', current_year: '1st Year'
+  });
+  assert.equal(duplicateSignup.response.status, 409, 'duplicate email registration returns 409');
+
+  // Verify invalid password login returns 401
+  const invalidPassLogin = await call('/auth/login', '', 'POST', {
+    email: 'smoke.student.'+suffix+'@example.test', password: 'WrongPassword@123'
+  });
+  assert.equal(invalidPassLogin.response.status, 401, 'invalid password returns 401');
+
+  // Verify new student can log out and log back in with same credentials
+  const reloggedStudent = await ok('/auth/login', '', 'POST', {
+    email: 'SMOKE.STUDENT.'+suffix+'@EXAMPLE.TEST', password: 'Testing@123'
+  });
+  assert.ok(reloggedStudent.token, 'case-insensitive student login succeeded');
+  assert.equal(reloggedStudent.user.role, 'student');
+  assert.equal(reloggedStudent.user.status, 'active');
+
+  // Verify relogged student can access /auth/me
+  const studentMe = await ok('/auth/me', reloggedStudent.token);
+  assert.equal(studentMe.id, reloggedStudent.user.id);
+  assert.equal(studentMe.role, 'student');
+
   const pendingUser=(await ok('/admin/users',admin)).find(user=>user.email==='smoke.alumni.'+suffix+'@example.test');
   assert.ok(pendingUser,'admin sees pending alumnus');
   await ok('/admin/users/'+pendingUser.id+'/verification',admin,'PATCH',{decision:'approve'});
   const approved=await ok('/auth/login','', 'POST',{email:'smoke.alumni.'+suffix+'@example.test',password:'Testing@123'});
   assert.equal(approved.user.status,'active');
+
+  // Verify suspended account cannot access protected routes
+  await ok('/admin/users/'+pendingUser.id+'/status',admin,'PATCH',{status:'suspended'});
+  const suspendedLogin = await call('/auth/login','','POST',{email:'smoke.alumni.'+suffix+'@example.test',password:'Testing@123'});
+  assert.equal(suspendedLogin.response.status, 403, 'suspended account login blocked');
+  const suspendedAccess = await call('/profile', approved.token);
+  assert.equal(suspendedAccess.response.status, 401, 'suspended session blocked from protected routes');
 
   const reports=await ok('/admin/reports',admin);
   assert.ok(Array.isArray(reports.usersByRole));

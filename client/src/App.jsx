@@ -302,9 +302,11 @@ function AuthScreen({authMode,setAuthMode,login,setLogin,register,setRegister,si
           <Field label="Email address" type="email" value={register.email} onChange={v=>set('email',v)} required/>
           <Field label="Password (minimum 8 characters)" type="password" value={register.password} onChange={v=>set('password',v)} required/>
           {register.role==='student'&&<>
-            <div className="form-two"><Field label="Student ID" value={register.student_id} onChange={v=>set('student_id',v)}/><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/></div>
-            <div className="form-two"><Field label="Degree" value={register.degree} onChange={v=>set('degree',v)}/><Field label="Current year" value={register.current_year} onChange={v=>set('current_year',v)} placeholder="e.g. Third Year"/></div>
-            <Field label="Expected graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)}/>
+            <div className="form-two"><Field label="Student ID" value={register.student_id} onChange={v=>set('student_id',v)} required/><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/></div>
+            <div className="form-two"><Field label="Degree" value={register.degree} onChange={v=>set('degree',v)} required placeholder="e.g. B.Tech / B.E."/><Field label="Current academic year" value={register.current_year} onChange={v=>set('current_year',v)} required placeholder="e.g. 3rd Year"/></div>
+            <Field label="Expected graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)} placeholder="e.g. 2026"/>
+            <Field label="Skills (comma-separated, optional)" value={register.skills || ''} onChange={v=>set('skills',v)} placeholder="e.g. JavaScript, Python, React"/>
+            <Field label="Interests & Bio (optional)" rows={2} value={register.bio || ''} onChange={v=>set('bio',v)} placeholder="Tell the community about your goals…"/>
           </>}
           {register.role==='alumni'&&<>
             <div className="form-two"><Field label="Department" value={register.department} onChange={v=>set('department',v)} required/><Field label="Graduation year" type="number" value={register.graduation_year} onChange={v=>set('graduation_year',v)} required/></div>
