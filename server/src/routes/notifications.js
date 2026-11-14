@@ -1,5 +1,5 @@
 /**
- * Notifications routes — owned by Arshiyan (Nayan's reassigned work).
+ * Notifications routes — owned by Nayan.
  *
  * Endpoints:
  *   GET   /api/notifications        — fetch current user's notifications (newest first)
