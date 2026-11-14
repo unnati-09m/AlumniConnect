@@ -182,6 +182,11 @@ async function run() {
 
   const pendingUser=(await ok('/admin/users',admin)).find(user=>user.email==='smoke.alumni.'+suffix+'@example.test');
   assert.ok(pendingUser,'admin sees pending alumnus');
+
+  // Security Regression Check: Unverified alumni CANNOT be activated via generic status endpoint
+  const genericActivationBlocked = await call('/admin/users/'+pendingUser.id+'/status', admin, 'PATCH', { status: 'active' });
+  assert.equal(genericActivationBlocked.response.status, 400, 'unverified alumni activation via generic status endpoint must be rejected (HTTP 400)');
+
   await ok('/admin/users/'+pendingUser.id+'/verification',admin,'PATCH',{decision:'approve'});
   const approved=await ok('/auth/login','', 'POST',{email:'smoke.alumni.'+suffix+'@example.test',password:'Testing@123'});
   assert.equal(approved.user.status,'active');
@@ -192,6 +197,9 @@ async function run() {
   assert.equal(suspendedLogin.response.status, 403, 'suspended account login blocked');
   const suspendedAccess = await call('/profile', approved.token);
   assert.equal(suspendedAccess.response.status, 401, 'suspended session blocked from protected routes');
+
+  // Verified alumni can be reactivated normally via generic status endpoint
+  await ok('/admin/users/'+pendingUser.id+'/status',admin,'PATCH',{status:'active'});
 
   const reports=await ok('/admin/reports',admin);
   assert.ok(Array.isArray(reports.usersByRole));

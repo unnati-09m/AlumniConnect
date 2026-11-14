@@ -88,6 +88,21 @@ pool.query = async (sql, values = []) => {
       })
     };
   }
+  if (sql.includes("SELECT u.id,u.name,u.email,u.role,u.status,p.is_verified FROM users u LEFT JOIN alumni_profiles p")) {
+    const u = users.find(x => x.id === Number(values[0]) && x.role !== 'admin');
+    if (!u) return { rows: [] };
+    const p = alumniProfiles.find(x => x.user_id === u.id);
+    return {
+      rows: [{
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        is_verified: p ? p.is_verified : false
+      }]
+    };
+  }
   if (sql.includes("UPDATE users SET status=$1 WHERE id=$2 AND role<>'admin'")) {
     const u = users.find(x => x.id === Number(values[1]) && x.role !== 'admin');
     if (u) {
@@ -186,6 +201,21 @@ async function runTests() {
   assert.equal(reactivateStudent.status, 200, 'Student account reactivated');
   assert.equal(reactivateStudent.data.status, 'active');
   console.log('✓ Admin user suspension and reactivation lifecycle verified');
+
+  // 4b. Security Regression: Unverified alumni CANNOT be activated via generic status endpoint
+  const activateUnverifiedAlumni = await testRequest('/api/admin/users/3/status', 'PATCH', adminToken, { status: 'active' });
+  assert.equal(activateUnverifiedAlumni.status, 400, 'Unverified alumni activation via generic status endpoint must be blocked (HTTP 400)');
+  assert.match(activateUnverifiedAlumni.data.message, /verification approval/i);
+
+  // Verified alumni (id: 4, is_verified: true) can be suspended and reactivated normally
+  const suspendVerifiedAlumni = await testRequest('/api/admin/users/4/status', 'PATCH', adminToken, { status: 'suspended' });
+  assert.equal(suspendVerifiedAlumni.status, 200, 'Verified alumni can be suspended');
+  assert.equal(suspendVerifiedAlumni.data.status, 'suspended');
+
+  const reactivateVerifiedAlumni = await testRequest('/api/admin/users/4/status', 'PATCH', adminToken, { status: 'active' });
+  assert.equal(reactivateVerifiedAlumni.status, 200, 'Verified alumni can be reactivated');
+  assert.equal(reactivateVerifiedAlumni.data.status, 'active');
+  console.log('✓ Security check: unverified alumni activation guard & verified alumni lifecycle verified');
 
   // 5. Admin can verify alumni (atomic transaction)
   const approveAlumni = await testRequest('/api/admin/users/3/verification', 'PATCH', adminToken, {

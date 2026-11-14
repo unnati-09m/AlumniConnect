@@ -37,6 +37,11 @@ router.get('/users', auth, roles('admin'), asyncRoute(async (_req, res) => {
  * PATCH /api/admin/users/:id/status
  * Updates user account status between 'active' and 'suspended'.
  * Admins cannot suspend themselves or other admins.
+ * 
+ * Security Rule:
+ * Unverified or rejected alumni cannot be reactivated through this endpoint.
+ * Alumni accounts can ONLY become active through the formal verification approval process.
+ * Once verified, alumni accounts can be suspended and reactivated normally.
  */
 router.patch('/users/:id/status', auth, active, roles('admin'), asyncRoute(async (req, res) => {
   const status = req.body.status;
@@ -49,14 +54,30 @@ router.patch('/users/:id/status', auth, active, roles('admin'), asyncRoute(async
     return res.status(400).json({ message: 'Administrators cannot modify or suspend their own account status.' });
   }
 
+  // Step 1: Look up the user's role and alumni verification status
+  const userCheck = await pool.query(
+    "SELECT u.id,u.name,u.email,u.role,u.status,p.is_verified FROM users u LEFT JOIN alumni_profiles p ON p.user_id=u.id WHERE u.id=$1 AND u.role<>'admin'",
+    [req.params.id]
+  );
+
+  const targetUser = userCheck.rows[0];
+  if (!targetUser) {
+    return res.status(404).json({ message: 'User not found or cannot be modified by administrator.' });
+  }
+
+  // Step 2: Prevent unverified alumni from becoming active without formal verification
+  if (status === 'active' && targetUser.role === 'alumni' && !targetUser.is_verified) {
+    return res.status(400).json({
+      message: 'Unverified alumni accounts can only become active through verification approval.'
+    });
+  }
+
+  // Step 3: Perform the status update (e.g. for students or verified alumni)
   const result = await pool.query(
     "UPDATE users SET status=$1 WHERE id=$2 AND role<>'admin' RETURNING id,name,email,role,status",
     [status, req.params.id]
   );
 
-  if (!result.rows[0]) {
-    return res.status(404).json({ message: 'User not found or cannot be modified by administrator.' });
-  }
   res.json(result.rows[0]);
 }));
 
