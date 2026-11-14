@@ -135,3 +135,41 @@ router.get(
     return res.json(result.rows);
   })
 );
+// ---------------------------------------------------------------------------
+// PATCH /:id — admin updates pledge status
+// ---------------------------------------------------------------------------
+router.patch(
+  '/:id',
+  auth,
+  active,
+  roles('admin'),
+  asyncRoute(async (req, res) => {
+    const pledgeId = Number(req.params.id);
+    if (!pledgeId) {
+      return res.status(400).json({ message: 'Invalid pledge ID.' });
+    }
+
+    const { status } = req.body;
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        message: `Status must be one of: ${VALID_STATUSES.join(', ')}.`,
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE donation_pledges
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [status, pledgeId]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'Pledge not found.' });
+    }
+
+    return res.json(result.rows[0]);
+  })
+);
+
+export default router;
