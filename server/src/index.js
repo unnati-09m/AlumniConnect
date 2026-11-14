@@ -109,7 +109,7 @@ app.use((error, _req, res, _next) => {
 const builtClient = path.join(root, 'client', 'dist');
 if (fs.existsSync(builtClient)) {
   app.use(express.static(builtClient));
-  app.get('*', (_req, res) => res.sendFile(path.join(builtClient, 'index.html')));
+  app.use((_req, res) => res.sendFile(path.join(builtClient, 'index.html')));
 }
 
 const port = Number(process.env.PORT) || 4000;
