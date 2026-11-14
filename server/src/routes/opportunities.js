@@ -9,11 +9,32 @@ const notify = async (userId, title, body) => {
   await pool.query('INSERT INTO notifications (user_id,title,body) VALUES ($1,$2,$3)', [userId, title, body]);
 };
 
-// GET / — list opportunities (active only for non-admins)
+// GET / — list opportunities (active only for non-admins) with search and filters
 router.get('/', auth, asyncRoute(async (req, res) => {
+  const searchQuery = text(req.query.search);
+  const typeFilter = text(req.query.type);
+  const locationFilter = text(req.query.location);
+
+  const values = [req.user.role];
+  let where = "(o.is_active=TRUE OR $1='admin') AND (o.apply_by IS NULL OR o.apply_by>=CURRENT_DATE OR $1='admin')";
+
+  if (searchQuery) {
+    values.push('%' + searchQuery + '%');
+    const idx = values.length;
+    where += ' AND (o.title ILIKE $' + idx + ' OR o.company ILIKE $' + idx + ' OR o.description ILIKE $' + idx + ')';
+  }
+  if (typeFilter && ['internship', 'job', 'project'].includes(typeFilter)) {
+    values.push(typeFilter);
+    where += ' AND o.type=$' + values.length;
+  }
+  if (locationFilter) {
+    values.push('%' + locationFilter + '%');
+    where += ' AND o.location ILIKE $' + values.length;
+  }
+
   const result = await pool.query(
-    "SELECT o.*,u.name AS posted_by,u.role AS poster_role FROM opportunities o LEFT JOIN users u ON u.id=COALESCE(o.created_by,o.alumni_id) WHERE (o.is_active=TRUE OR $1='admin') AND (o.apply_by IS NULL OR o.apply_by>=CURRENT_DATE OR $1='admin') ORDER BY o.created_at DESC LIMIT 200",
-    [req.user.role]
+    'SELECT o.*,u.name AS posted_by,u.role AS poster_role FROM opportunities o LEFT JOIN users u ON u.id=COALESCE(o.created_by,o.alumni_id) WHERE ' + where + ' ORDER BY o.created_at DESC LIMIT 200',
+    values
   );
   res.json(result.rows);
 }));
@@ -30,6 +51,42 @@ router.post('/', auth, active, roles('alumni', 'admin'), asyncRoute(async (req, 
   const recipients = await pool.query("SELECT id FROM users WHERE role='student' AND status='active'");
   for (const row of recipients.rows) await notify(row.id, 'New opportunity', title + ' at ' + company + ' has been posted.');
   res.status(201).json(result.rows[0]);
+}));
+
+// PATCH /:id — edit an existing opportunity (owner or admin)
+router.patch('/:id', auth, active, roles('alumni', 'admin'), asyncRoute(async (req, res) => {
+  const opp = (await pool.query('SELECT * FROM opportunities WHERE id=$1', [req.params.id])).rows[0];
+  if (!opp) return res.status(404).json({ message: 'Opportunity not found.' });
+  const isOwner = req.user.role === 'admin' || opp.created_by === req.user.id || opp.alumni_id === req.user.id;
+  if (!isOwner) return res.status(403).json({ message: 'You do not have permission to edit this opportunity.' });
+
+  const title = req.body.title === undefined ? opp.title : text(req.body.title);
+  const company = req.body.company === undefined ? opp.company : text(req.body.company);
+  const description = req.body.description === undefined ? opp.description : text(req.body.description);
+  const type = req.body.type === undefined ? opp.type : req.body.type;
+  const location = req.body.location === undefined ? opp.location : text(req.body.location);
+  const apply_by = req.body.apply_by === undefined ? opp.apply_by : (req.body.apply_by || null);
+  const application_url = req.body.application_url === undefined ? opp.application_url : text(req.body.application_url);
+  const is_active = req.body.is_active === undefined ? opp.is_active : Boolean(req.body.is_active);
+
+  if (!title || !company || !description) return res.status(400).json({ message: 'Title, company and description cannot be empty.' });
+
+  const result = await pool.query(
+    'UPDATE opportunities SET title=$1, company=$2, description=$3, type=$4, location=$5, apply_by=$6, application_url=$7, is_active=$8 WHERE id=$9 RETURNING *',
+    [title, company, description, type, location, apply_by, application_url, is_active, req.params.id]
+  );
+  res.json(result.rows[0]);
+}));
+
+// DELETE /:id — delete/remove an opportunity (owner or admin)
+router.delete('/:id', auth, active, roles('alumni', 'admin'), asyncRoute(async (req, res) => {
+  const opp = (await pool.query('SELECT * FROM opportunities WHERE id=$1', [req.params.id])).rows[0];
+  if (!opp) return res.status(404).json({ message: 'Opportunity not found.' });
+  const isOwner = req.user.role === 'admin' || opp.created_by === req.user.id || opp.alumni_id === req.user.id;
+  if (!isOwner) return res.status(403).json({ message: 'You do not have permission to delete this opportunity.' });
+
+  await pool.query('DELETE FROM opportunities WHERE id=$1', [req.params.id]);
+  res.json({ message: 'Opportunity deleted successfully.' });
 }));
 
 // POST /:id/apply — student applies for an opportunity

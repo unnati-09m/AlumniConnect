@@ -57,6 +57,30 @@ async function run() {
   const directory=await ok('/alumni',student);
   assert.ok(directory.some(person=>person.id===alumniProfile.id),'student sees verified alumni');
 
+  // Verify Alumni Directory detailed profile view (Arshiyan scope)
+  const singleAlumni = await ok('/alumni/' + alumniProfile.id, student);
+  assert.equal(singleAlumni.id, alumniProfile.id, 'alumni profile endpoint returns alumnus data');
+  assert.ok(Array.isArray(singleAlumni.career_history), 'alumni profile includes career history array');
+
+  // Verify Alumni Directory search and department filtering
+  const filteredDir = await ok('/alumni?department=Computer%20Science', student);
+  assert.ok(filteredDir.every(p => p.department === 'Computer Science'), 'alumni directory filters by department');
+
+  // Verify Career History management: POST, PUT, GET by alumni ID, DELETE (Arshiyan scope)
+  const careerEntry = await ok('/career-history', alumni, 'POST', {
+    company: 'Test Innovations', job_title: 'Software Engineer', employment_type: 'Full-time',
+    location: 'Pune', start_date: '2023-01-01', is_current: true, description: 'Building full stack web apps.'
+  });
+  assert.equal(careerEntry.company, 'Test Innovations');
+  const updatedCareer = await ok('/career-history/' + careerEntry.id, alumni, 'PUT', {
+    company: 'Test Innovations Ltd', job_title: 'Senior Software Engineer', employment_type: 'Full-time',
+    location: 'Pune', start_date: '2023-01-01', is_current: true, description: 'Leading engineering team.'
+  });
+  assert.equal(updatedCareer.job_title, 'Senior Software Engineer');
+  const publicCareer = await ok('/career-history/alumni/' + alumniProfile.id, student);
+  assert.ok(publicCareer.some(c => c.id === careerEntry.id), 'students can view verified alumni public career history');
+  await ok('/career-history/' + careerEntry.id, alumni, 'DELETE');
+
   const mentorship=await ok('/mentorship',student,'POST',{
     alumni_id:alumniProfile.id,topic:'Smoke test mentoring',message:'Please guide me about career planning.'
   });
@@ -66,16 +90,35 @@ async function run() {
   const studentRequests=await ok('/mentorship',student);
   assert.equal(studentRequests.find(item=>item.id===mentorship.id).status,'accepted');
 
+  // Verify Opportunities and Applications (Arshiyan scope)
   const opportunity=await ok('/opportunities',alumni,'POST',{
     title:'Smoke test internship',company:'Demo Labs',description:'A test listing for the automated workflow.',
     type:'internship',location:'Remote'
   });
-  const application=await ok('/opportunities/'+opportunity.id+'/apply',student,'POST',{note:'Interested in this role.'});
+  // Search and filter opportunities
+  const filteredOpps = await ok('/opportunities?type=internship&search=Demo', student);
+  assert.ok(filteredOpps.some(o => o.id === opportunity.id), 'opportunities search and type filtering works');
+
+  // Edit opportunity (Arshiyan scope)
+  const updatedOpp = await ok('/opportunities/' + opportunity.id, alumni, 'PATCH', {
+    title: 'Smoke test internship (Updated)'
+  });
+  assert.equal(updatedOpp.title, 'Smoke test internship (Updated)', 'opportunity editing works');
+
+  const application=await ok('/opportunities/'+opportunity.id+'/apply',student,'POST',{note:'Interested in this role.',resume_url:'https://example.com/resume.pdf'});
+  assert.equal(application.resume_url, 'https://example.com/resume.pdf', 'application stores resume URL');
   const mentorApplicants=await ok('/managed-applications',alumni);
   assert.ok(mentorApplicants.some(item=>item.id===application.id),'opportunity owner sees applicant');
   await ok('/applications/'+application.id+'/status',alumni,'PATCH',{status:'shortlisted'});
   const myApplications=await ok('/my-applications',student);
   assert.equal(myApplications.find(item=>item.id===application.id).status,'shortlisted');
+
+  // Non-owner cannot edit or delete opportunity
+  const forbiddenOppEdit = await call('/opportunities/' + opportunity.id, student, 'PATCH', { title: 'Hacked' });
+  assert.equal(forbiddenOppEdit.response.status, 403, 'students cannot edit opportunities');
+
+  // Delete opportunity (Arshiyan scope)
+  await ok('/opportunities/' + opportunity.id, alumni, 'DELETE');
 
   const event=await ok('/events',admin,'POST',{
     title:'Smoke test community event',description:'An event used by automated tests.',venue:'Online',
@@ -111,6 +154,12 @@ async function run() {
   const csv=await call('/admin/alumni.csv',admin);
   assert.equal(csv.response.status,200);
   assert.match(csv.data,/Graduation Year/);
+
+  const csv2=await call('/alumni/export/csv',admin);
+  assert.equal(csv2.response.status,200, 'admin can export alumni CSV via alumni route');
+  assert.match(csv2.data,/Graduation Year/);
+  const forbiddenCsv=await call('/alumni/export/csv',student);
+  assert.equal(forbiddenCsv.response.status,403,'students cannot export alumni CSV');
 
   const forbidden=await call('/admin/users',student);
   assert.equal(forbidden.response.status,403,'students cannot access admin user management');
