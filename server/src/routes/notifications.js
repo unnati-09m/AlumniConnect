@@ -54,3 +54,49 @@ router.get(
     return res.json({ unreadCount: result.rows[0].count });
   })
 );
+// ---------------------------------------------------------------------------
+// PATCH /:id/read — mark a single notification as read (owner only)
+// ---------------------------------------------------------------------------
+router.patch(
+  '/:id/read',
+  auth,
+  asyncRoute(async (req, res) => {
+    const notifId = Number(req.params.id);
+    if (!notifId) {
+      return res.status(400).json({ message: 'Invalid notification ID.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE notifications
+       SET is_read = TRUE
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [notifId, req.user.id]
+    );
+
+    if (!result.rows[0]) {
+      return res
+        .status(404)
+        .json({ message: 'Notification not found.' });
+    }
+
+    return res.json(result.rows[0]);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// PATCH /mark-all-read — mark all of the current user's notifications as read
+// ---------------------------------------------------------------------------
+router.patch(
+  '/mark-all-read',
+  auth,
+  asyncRoute(async (req, res) => {
+    await pool.query(
+      `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE`,
+      [req.user.id]
+    );
+    return res.json({ message: 'All notifications marked as read.' });
+  })
+);
+
+export default router;
