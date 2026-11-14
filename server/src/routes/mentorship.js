@@ -1,5 +1,5 @@
 /**
- * Mentorship lifecycle routes — owned by Arshiyan (Nayan's reassigned work).
+ * Mentorship lifecycle routes — owned by Nayan.
  *
  * Endpoints:
  *   POST   /api/mentorship          — student submits a request to an active alumnus
@@ -44,7 +44,6 @@ const notify = async (userId, title, body) => {
     console.error('notify() failed:', err.message);
   }
 };
-
 // ---------------------------------------------------------------------------
 // POST / — student submits a mentorship request to an active, verified alumnus
 // ---------------------------------------------------------------------------
