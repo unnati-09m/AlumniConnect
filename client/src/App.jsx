@@ -9,7 +9,7 @@ import {
 const API = (import.meta.env.VITE_API_URL || '') + '/api';
 const DEMO_PASSWORD = 'Demo@123';
 
-async function request(path, token, options = {}) {
+export async function request(path, token, options = {}) {
   const response = await fetch(API + path, {
     ...options,
     headers: {
@@ -245,9 +245,11 @@ export default function App() {
         {busy&&<div className="saving-line">Saving your changes…</div>}
 
         {page==='Overview'&&<Overview role={user.role} user={user} data={dashboard} alumni={alumni} mentorship={mentorship} opportunities={opportunities} events={events} announcements={announcements} managedApplications={managedApplications} go={changePage}/>}
-        {page==='Alumni Directory'&&<AlumniDirectory people={filteredAlumni} role={user.role} onMentor={person=>{setMentorTarget(person);setMentorForm({topic:'Career guidance',message:''});}}/>}
+        {page==='Alumni Directory'&&<AlumniDirectory people={filteredAlumni} role={user.role} onMentor={person=>{setMentorTarget(person);setMentorForm({topic:'Career guidance',message:''});}} onExportCsv={async()=>{
+          try { const response=await fetch(API+'/admin/alumni.csv',{headers:{Authorization:'Bearer '+token}}); if(!response.ok)throw new Error('CSV export failed.'); const blob=await response.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='alumni-directory.csv'; a.click(); URL.revokeObjectURL(url); setSuccess('Alumni CSV downloaded.'); } catch(err){setError(err.message);}
+        }}/>}
         {page==='Mentorship'&&<Mentorship items={mentorship} role={user.role} run={run}/>}
-        {page==='Opportunities'&&<Opportunities items={opportunities} role={user.role} form={jobForm} setForm={setJobForm} run={run}/>}
+        {page==='Opportunities'&&<Opportunities items={opportunities} role={user.role} user={user} form={jobForm} setForm={setJobForm} run={run}/>}
         {page==='My Applications'&&<MyApplications items={applications}/>}
         {page==='Applicants'&&<Applicants items={managedApplications} run={run}/>}
         {page==='Events'&&<Events items={events} role={user.role} form={eventForm} setForm={setEventForm} run={run}/>}
@@ -358,15 +360,68 @@ function Overview({role,user,data,alumni,mentorship,opportunities,events,announc
   </div>;
 }
 
-function AlumniDirectory({people,role,onMentor}) {
+function AlumniDirectory({people,role,onMentor,onExportCsv}) {
   const [department,setDepartment]=useState('all');
+  const [selectedAlumnus,setSelectedAlumnus]=useState(null);
   const departments=[...new Set(people.map(p=>p.department).filter(Boolean))];
   const visible=department==='all'?people:people.filter(p=>p.department===department);
   return <div className="panel">
-    <div className="directory-toolbar"><div><h3>{visible.length} verified alumni</h3><p>Connect with people who have walked the path before you.</p></div><select value={department} onChange={e=>setDepartment(e.target.value)}><option value="all">All departments</option>{departments.map(d=><option key={d}>{d}</option>)}</select></div>
-    {visible.length?<div className="people-grid">{visible.map(person=><article className="person-card" key={person.id}><div className="person-card-top"><Avatar name={person.name} size="large"/><span className="verified-badge"><ShieldCheck size={13}/> Verified</span></div><h3>{person.name}</h3><p className="person-role">{person.job_title||'Alumni member'} {person.company?'at '+person.company:''}</p><div className="person-meta"><span><GraduationCap size={14}/>{person.department}</span><span><CalendarDays size={14}/>Class of {person.graduation_year}</span><span><Building2 size={14}/>{person.location||'Location not shared'}</span></div><p className="person-bio">{person.bio||'Open to connecting with the institution community.'}</p>{person.skills?.length>0&&<div className="skill-list">{person.skills.slice(0,5).map(skill=><span key={skill}>{skill}</span>)}</div>}
-      {person.linkedin_url&&<a className="profile-url" href={person.linkedin_url} target="_blank" rel="noreferrer">LinkedIn profile <ArrowRight size={13}/></a>}
-      {role==='student'&&<button className="outline-btn full" onClick={()=>onMentor(person)}><Handshake size={15}/> Request mentorship</button>}</article>)}</div>:<Empty title="No matching alumni found" detail="Try another name, company or department."/>}
+    <div className="directory-toolbar">
+      <div><h3>{visible.length} verified alumni</h3><p>Connect with people who have walked the path before you.</p></div>
+      <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
+        {role==='admin'&&onExportCsv&&<button className="outline-btn small" onClick={onExportCsv}><ArrowDownToLine size={14}/> Export CSV</button>}
+        <select value={department} onChange={e=>setDepartment(e.target.value)}><option value="all">All departments</option>{departments.map(d=><option key={d}>{d}</option>)}</select>
+      </div>
+    </div>
+    {visible.length?<div className="people-grid">{visible.map(person=><article className="person-card" key={person.id}>
+      <div className="person-card-top"><Avatar name={person.name} size="large"/><span className="verified-badge"><ShieldCheck size={13}/> Verified</span></div>
+      <h3>{person.name}</h3>
+      <p className="person-role">{person.job_title||'Alumni member'} {person.company?'at '+person.company:''}</p>
+      <div className="person-meta"><span><GraduationCap size={14}/>{person.department}</span><span><CalendarDays size={14}/>Class of {person.graduation_year}</span><span><Building2 size={14}/>{person.location||'Location not shared'}</span></div>
+      <p className="person-bio">{person.bio||'Open to connecting with the institution community.'}</p>
+      {person.skills?.length>0&&<div className="skill-list">{person.skills.slice(0,5).map(skill=><span key={skill}>{skill}</span>)}</div>}
+      <div style={{display:'flex',gap:'8px',marginTop:'12px',flexDirection:'column'}}>
+        <button className="secondary-btn full small" onClick={()=>setSelectedAlumnus(person)}>View profile</button>
+        {role==='student'&&<button className="outline-btn full small" onClick={()=>onMentor(person)}><Handshake size={14}/> Request mentorship</button>}
+        {person.linkedin_url&&<a className="profile-url" href={person.linkedin_url} target="_blank" rel="noreferrer">LinkedIn profile <ArrowRight size={13}/></a>}
+      </div>
+    </article>)}</div>:<Empty title="No matching alumni found" detail="Try another name, company or department."/>}
+    {selectedAlumnus&&<AlumniProfileModal person={selectedAlumnus} role={role} onMentor={onMentor} close={()=>setSelectedAlumnus(null)}/>}
+  </div>;
+}
+
+function AlumniProfileModal({person,role,onMentor,close}) {
+  const [details,setDetails]=useState(null);
+  useEffect(()=>{
+    request('/alumni/'+person.id).then(setDetails).catch(()=>setDetails(person));
+  },[person.id]);
+
+  const p = details || person;
+  return <div className="modal-backdrop" onMouseDown={close}>
+    <section className="modal-card" style={{maxWidth:'600px'}} onMouseDown={e=>e.stopPropagation()}>
+      <button className="modal-close" onClick={close}><X/></button>
+      <div style={{display:'flex',gap:'16px',alignItems:'center',marginBottom:'18px'}}>
+        <Avatar name={p.name} size="large"/>
+        <div>
+          <span className="eyebrow">VERIFIED ALUMNI PROFILE</span>
+          <h2 style={{margin:'2px 0'}}>{p.name}</h2>
+          <p style={{margin:0,color:'var(--muted)'}}>{p.job_title||'Alumnus'} {p.company?'at '+p.company:''}</p>
+        </div>
+      </div>
+      <div className="person-meta" style={{marginBottom:'16px'}}>
+        <span><GraduationCap size={14}/>{p.department} ({p.degree||'Degree'})</span>
+        <span><CalendarDays size={14}/>Class of {p.graduation_year}</span>
+        <span><Building2 size={14}/>{p.location||'Location not specified'}</span>
+      </div>
+      {p.bio&&<div style={{marginBottom:'16px'}}><strong style={{fontSize:'12px',display:'block',marginBottom:'4px'}}>About</strong><p style={{margin:0,fontSize:'13px',color:'#4a5568',lineHeight:'1.5'}}>{p.bio}</p></div>}
+      {p.skills?.length>0&&<div style={{marginBottom:'18px'}}><strong style={{fontSize:'12px',display:'block',marginBottom:'6px'}}>Skills & Expertise</strong><div className="skill-list">{p.skills.map(s=><span key={s}>{s}</span>)}</div></div>}
+      {p.career_history?.length>0&&<div style={{marginBottom:'18px'}}><strong style={{fontSize:'12px',display:'block',marginBottom:'8px'}}>Career Timeline</strong><div className="timeline" style={{paddingLeft:'12px'}}>{p.career_history.map(item=><div className="timeline-item" key={item.id}><span className="timeline-dot"/><div><strong>{item.job_title}</strong><p style={{margin:'2px 0'}}>{item.company} · {item.location}</p><small style={{color:'var(--muted)'}}>{dateText(item.start_date)} — {item.is_current?'Present':dateText(item.end_date)}</small></div></div>)}</div></div>}
+      {p.linkedin_url&&<div style={{marginBottom:'16px'}}><a className="profile-url" href={p.linkedin_url} target="_blank" rel="noreferrer">LinkedIn Profile <ArrowRight size={13}/></a></div>}
+      <div style={{display:'flex',gap:'10px',marginTop:'18px'}}>
+        {role==='student'&&<button className="primary-btn" onClick={()=>{close();onMentor(p);}}><Handshake size={15}/> Request mentorship</button>}
+        <button className="outline-btn" onClick={close}>Close</button>
+      </div>
+    </section>
   </div>;
 }
 
@@ -385,17 +440,69 @@ function MentorshipComposer({person,form,setForm,close,submit}) {
   return <div className="modal-backdrop" onMouseDown={close}><section className="modal-card" onMouseDown={e=>e.stopPropagation()}><button className="modal-close" onClick={close}><X/></button><span className="eyebrow">START A CONVERSATION</span><h2>Request mentorship</h2><p className="muted">Your request will be sent directly to {person.name}.</p><div className="mentor-preview"><Avatar name={person.name}/><div><strong>{person.name}</strong><small>{person.job_title} {person.company?'at '+person.company:''}</small></div></div><form className="form-stack" onSubmit={e=>{e.preventDefault();submit();}}><Field label="What would you like guidance on?" value={form.topic} onChange={v=>setForm({...form,topic:v})} required placeholder="Career guidance, interviews, higher studies…"/><Field label="Message" value={form.message} onChange={v=>setForm({...form,message:v})} rows={4} placeholder="Introduce yourself and share what you'd like to learn."/><button className="primary-btn full">Send mentorship request <ArrowRight size={16}/></button></form></section></div>;
 }
 
-function Opportunities({items,role,form,setForm,run}) {
+function Opportunities({items,role,user,form,setForm,run}) {
   const [showForm,setShowForm]=useState(false);
+  const [applyTarget,setApplyTarget]=useState(null);
+  const [applyForm,setApplyForm]=useState({note:'',resume_url:''});
+  const [typeFilter,setTypeFilter]=useState('all');
+  const [search,setSearch]=useState('');
   const canPost=['alumni','admin'].includes(role);
   const set=(key,value)=>setForm(old=>({...old,[key]:value}));
   const submit=async e=>{e.preventDefault();const ok=await run('/opportunities','POST',form);if(ok){setShowForm(false);setForm({title:'',company:'',description:'',type:'internship',location:'Remote',apply_by:'',application_url:''});}};
+
+  const filtered = items.filter(item => {
+    const matchesType = typeFilter === 'all' || item.type === typeFilter;
+    const matchesSearch = !search || [item.title, item.company, item.description, item.location].join(' ').toLowerCase().includes(search.toLowerCase());
+    return matchesType && matchesSearch;
+  });
+
   return <div className="content-stack">
     {canPost&&<div className="action-strip"><div><strong>Share an opportunity</strong><p>Help students discover internships, jobs and projects.</p></div><button className="primary-btn" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/>{showForm?'Close form':'Post opportunity'}</button></div>}
     {showForm&&<form className="panel form-panel" onSubmit={submit}><div className="panel-heading"><div><span className="eyebrow">CAREER OPPORTUNITY</span><h3>Create a listing</h3></div></div><div className="form-grid"><Field label="Opportunity title" value={form.title} onChange={v=>set('title',v)} required/><Field label="Company" value={form.company} onChange={v=>set('company',v)} required/><Field label="Type" value={form.type} onChange={v=>set('type',v)} options={['internship','job','project'].map(v=>({value:v,label:pretty(v)}))}/><Field label="Location" value={form.location} onChange={v=>set('location',v)}/><Field label="Application deadline" type="date" value={form.apply_by} onChange={v=>set('apply_by',v)}/><Field label="Application URL" type="url" value={form.application_url} onChange={v=>set('application_url',v)}/><div className="span-two"><Field label="Description" rows={3} value={form.description} onChange={v=>set('description',v)} required/></div></div><button className="primary-btn">Publish opportunity <ArrowRight size={15}/></button></form>}
-    {items.length?<div className="opportunity-grid">{items.map(item=><article className="opportunity-card" key={item.id}><div className="opportunity-top"><span className="opportunity-kind">{pretty(item.type)}</span><span className="poster-kind">{pretty(item.poster_role||'alumni')}</span></div><div className="opportunity-company"><span className="company-icon"><Building2 size={18}/></span><div><strong>{item.company}</strong><small>{item.location||'Location not specified'}</small></div></div><h3>{item.title}</h3><p>{item.description}</p><div className="opportunity-meta"><span><CalendarDays size={14}/> {item.apply_by?'Apply by '+dateText(item.apply_by):'Open until filled'}</span><span>Shared by {item.posted_by||'Community'}</span></div>
-      {role==='student'&&<button className="primary-btn full" onClick={()=>run('/opportunities/'+item.id+'/apply','POST',{})}>Apply now <ArrowRight size={15}/></button>}
-      {canPost&&<small className="owner-note">Applicants for your listings appear in the Applicants section.</small>}</article>)}</div>:<Empty title="No opportunities available" detail="New internships, jobs and projects will appear here when shared by alumni or the institution."/>}
+    <div className="directory-toolbar">
+      <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+        {['all','internship','job','project'].map(t => (
+          <button key={t} type="button" className={'outline-btn small ' + (typeFilter===t?'active':'')} onClick={()=>setTypeFilter(t)}>{t==='all'?'All types':pretty(t)+'s'}</button>
+        ))}
+      </div>
+      <div className="search-box">
+        <Search size={16}/>
+        <input type="text" placeholder="Search opportunities…" value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+    </div>
+    {filtered.length?<div className="opportunity-grid">{filtered.map(item=>{
+      const isOwner = role==='admin' || (user && (item.created_by===user.id || item.alumni_id===user.id));
+      return <article className="opportunity-card" key={item.id}>
+        <div className="opportunity-top"><span className="opportunity-kind">{pretty(item.type)}</span><span className="poster-kind">{pretty(item.poster_role||'alumni')}</span></div>
+        <div className="opportunity-company"><span className="company-icon"><Building2 size={18}/></span><div><strong>{item.company}</strong><small>{item.location||'Location not specified'}</small></div></div>
+        <h3>{item.title}</h3>
+        <p>{item.description}</p>
+        <div className="opportunity-meta"><span><CalendarDays size={14}/> {item.apply_by?'Apply by '+dateText(item.apply_by):'Open until filled'}</span><span>Shared by {item.posted_by||'Community'}</span></div>
+        {role==='student'&&<button className="primary-btn full" onClick={()=>setApplyTarget(item)}>Apply now <ArrowRight size={15}/></button>}
+        {isOwner&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'12px',paddingTop:'8px',borderTop:'1px solid var(--line)'}}><small className="owner-note">Your listing</small><button className="text-link danger-link" onClick={()=>run('/opportunities/'+item.id,'DELETE')}>Delete</button></div>}
+        {canPost&&!isOwner&&<small className="owner-note">Applicants for your listings appear in the Applicants section.</small>}
+      </article>;
+    })}</div>:<Empty title="No opportunities found" detail="New internships, jobs and projects will appear here when shared by alumni or the institution."/>}
+    {applyTarget&&<ApplyModal opportunity={applyTarget} form={applyForm} setForm={setApplyForm} close={()=>setApplyTarget(null)} submit={async()=>{
+      const ok=await run('/opportunities/'+applyTarget.id+'/apply','POST',applyForm);
+      if(ok){setApplyTarget(null);setApplyForm({note:'',resume_url:''});}
+    }}/>}
+  </div>;
+}
+
+function ApplyModal({opportunity,form,setForm,close,submit}) {
+  return <div className="modal-backdrop" onMouseDown={close}>
+    <section className="modal-card" onMouseDown={e=>e.stopPropagation()}>
+      <button className="modal-close" onClick={close}><X/></button>
+      <span className="eyebrow">SUBMIT APPLICATION</span>
+      <h2>Apply for {opportunity.title}</h2>
+      <p className="muted">{opportunity.company} · {opportunity.location || 'Remote'}</p>
+      <form className="form-stack" onSubmit={e=>{e.preventDefault();submit();}}>
+        <Field label="Note / Cover Note (optional)" value={form.note} onChange={v=>setForm({...form,note:v})} rows={3} placeholder="Briefly mention why you're interested or your relevant background."/>
+        <Field label="Resume / Portfolio URL (optional)" type="url" value={form.resume_url} onChange={v=>setForm({...form,resume_url:v})} placeholder="https://drive.google.com/… or portfolio link"/>
+        <button className="primary-btn full">Confirm and submit application <ArrowRight size={15}/></button>
+      </form>
+    </section>
   </div>;
 }
 function MyApplications({items}) {
@@ -415,10 +522,55 @@ function Events({items,role,form,setForm,run}) {
   </div>;
 }
 function CareerHistory({items,form,setForm,run}) {
+  const [editingId,setEditingId]=useState(null);
   const set=(key,value)=>setForm(old=>({...old,[key]:value}));
-  const submit=async e=>{e.preventDefault();const ok=await run('/career-history','POST',form);if(ok)setForm({company:'',job_title:'',employment_type:'Full-time',location:'',start_date:'',end_date:'',is_current:false,description:''});};
-  return <div className="content-stack"><form className="panel form-panel" onSubmit={submit}><div className="panel-heading"><div><span className="eyebrow">CAREER JOURNEY</span><h3>Add a role or career update</h3></div></div><div className="form-grid"><Field label="Company" value={form.company} onChange={v=>set('company',v)} required/><Field label="Job title" value={form.job_title} onChange={v=>set('job_title',v)} required/><Field label="Employment type" value={form.employment_type} onChange={v=>set('employment_type',v)} options={['Full-time','Part-time','Internship','Freelance','Self-employed'].map(v=>({value:v,label:v}))}/><Field label="Location" value={form.location} onChange={v=>set('location',v)}/><Field label="Start date" type="date" value={form.start_date} onChange={v=>set('start_date',v)}/>{!form.is_current&&<Field label="End date" type="date" value={form.end_date} onChange={v=>set('end_date',v)}/>}<label className="check-field"><input type="checkbox" checked={form.is_current} onChange={e=>set('is_current',e.target.checked)}/> I currently work here</label><div className="span-two"><Field label="Description" rows={2} value={form.description} onChange={v=>set('description',v)}/></div></div><button className="primary-btn">Save career update <Plus size={15}/></button></form>
-    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">PROFESSIONAL HISTORY</span><h3>Your career timeline</h3></div></div>{items.length?<div className="timeline">{items.map(item=><div className="timeline-item" key={item.id}><span className="timeline-dot"/><div><strong>{item.job_title}</strong><p>{item.company} · {item.location}</p><small>{dateText(item.start_date)} — {item.is_current?'Present':dateText(item.end_date)}</small><p>{item.description}</p><button className="text-link danger-link" onClick={()=>run('/career-history/'+item.id,'DELETE')}>Remove</button></div></div>)}</div>:<Empty title="No career entries yet" detail="Add your current role and previous professional experiences here."/>}</section></div>;
+  const reset=()=>{setEditingId(null);setForm({company:'',job_title:'',employment_type:'Full-time',location:'',start_date:'',end_date:'',is_current:false,description:''});};
+  const submit=async e=>{
+    e.preventDefault();
+    const endpoint = editingId ? '/career-history/' + editingId : '/career-history';
+    const method = editingId ? 'PUT' : 'POST';
+    const ok = await run(endpoint, method, form);
+    if(ok) reset();
+  };
+  const startEdit=(item)=>{
+    setEditingId(item.id);
+    setForm({
+      company: item.company || '',
+      job_title: item.job_title || '',
+      employment_type: item.employment_type || 'Full-time',
+      location: item.location || '',
+      start_date: item.start_date ? item.start_date.split('T')[0] : '',
+      end_date: item.end_date ? item.end_date.split('T')[0] : '',
+      is_current: item.is_current === true,
+      description: item.description || ''
+    });
+  };
+  return <div className="content-stack">
+    <form className="panel form-panel" onSubmit={submit}>
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">CAREER JOURNEY</span>
+          <h3>{editingId?'Edit career entry':'Add a role or career update'}</h3>
+        </div>
+        {editingId&&<button type="button" className="outline-btn tiny" onClick={reset}>Cancel edit</button>}
+      </div>
+      <div className="form-grid">
+        <Field label="Company" value={form.company} onChange={v=>set('company',v)} required/>
+        <Field label="Job title" value={form.job_title} onChange={v=>set('job_title',v)} required/>
+        <Field label="Employment type" value={form.employment_type} onChange={v=>set('employment_type',v)} options={['Full-time','Part-time','Internship','Freelance','Self-employed'].map(v=>({value:v,label:v}))}/>
+        <Field label="Location" value={form.location} onChange={v=>set('location',v)}/>
+        <Field label="Start date" type="date" value={form.start_date} onChange={v=>set('start_date',v)}/>
+        {!form.is_current&&<Field label="End date" type="date" value={form.end_date} onChange={v=>set('end_date',v)}/>}
+        <label className="check-field"><input type="checkbox" checked={form.is_current} onChange={e=>set('is_current',e.target.checked)}/> I currently work here</label>
+        <div className="span-two"><Field label="Description" rows={2} value={form.description} onChange={v=>set('description',v)}/></div>
+      </div>
+      <button className="primary-btn">{editingId?'Update career entry':'Save career update'} <Plus size={15}/></button>
+    </form>
+    <section className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">PROFESSIONAL HISTORY</span><h3>Your career timeline</h3></div></div>
+      {items.length?<div className="timeline">{items.map(item=><div className="timeline-item" key={item.id}><span className="timeline-dot"/><div><strong>{item.job_title}</strong><p>{item.company} · {item.location}</p><small>{dateText(item.start_date)} — {item.is_current?'Present':dateText(item.end_date)}</small><p>{item.description}</p><div style={{display:'flex',gap:'10px',marginTop:'6px'}}><button className="text-link" onClick={()=>startEdit(item)}>Edit</button><button className="text-link danger-link" onClick={()=>run('/career-history/'+item.id,'DELETE')}>Remove</button></div></div></div>)}</div>:<Empty title="No career entries yet" detail="Add your current role and previous professional experiences here."/>}
+    </section>
+  </div>;
 }
 function DonationSupport({form,setForm,run}) {
   const set=(key,value)=>setForm(old=>({...old,[key]:value}));

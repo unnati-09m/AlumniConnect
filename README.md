@@ -167,7 +167,7 @@ This platform is developed collaboratively with clear separation of responsibili
 | Module | Developer | Branch | Status / Responsibility |
 |--------|-----------|--------|-------------------------|
 | **Auth + Student + Foundation** | **Unnati** | `feat/unnati-core-student` | **Lead Foundation**: Authentication, session persistence, role authorization, student onboarding, student dashboard, full DB schema, Express app core, responsive SPA shell. |
-| **Alumni Directory & Career** | **Arshiyan** | `feat/arshiyan-alumni-career` | Alumni directory search & filter, professional profiles, career history, opportunity posting & student application management, CSV export. |
+| **Alumni Directory & Career** | **Arshiyan** | `feat/arshiyan-alumni-directory` | **Completed & Integrated**: Alumni directory search & filter, detailed professional profiles, career history management, opportunity posting & student application lifecycle, admin CSV export. |
 | **Engagement & Admin** | **Nayan Jyoti** | `feat/nayan-engagement-admin` | Mentorship request lifecycle, events & registrations, notifications inbox, announcements broadcast, alumni verification, donation pledge tracking, reports. |
 
 ### Team Integration Guidelines
@@ -207,13 +207,3 @@ All routes follow consistent `{ message, data }` patterns.
 | `npm test` | Run smoke tests (requires running server) |
 | `npm run build` | Build the React frontend |
 | `npm start` | Start production server |
-
-Commit 1: Added alumni directory UI stub
-
-Commit 2: Minor UI tweak
-Update README for 5‑day commit
-Commit 4: minor fix (2 days ago)
-
----
-Auto‑generated commit on 2026-11-14 07:12:20 UTC
----
