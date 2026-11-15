@@ -230,7 +230,104 @@ async function runTests() {
   console.log('✓ Admin can view all institution-wide mentorship requests');
 
   // =========================================================================
-    console.log('\n--- MENTORSHIP MODULE TESTS COMPLETED ---\n');
+  // 2. Events & Registrations
+  // =========================================================================
+  console.log('\n[ 2 ] Events & Registrations Tests');
+
+  // 2a. Student cannot create events
+  const studentCreateEvent = await testRequest('/api/events', 'POST', studentToken, {
+    title: 'Student Event',
+    starts_at: new Date(Date.now() + 86400000).toISOString()
+  });
+  assert.equal(studentCreateEvent.status, 403, 'Students are blocked from creating events (403)');
+  console.log('✓ Student is blocked from event creation (403)');
+
+  // 2b. Past-date event creation rejected
+  const pastEvent = await testRequest('/api/events', 'POST', adminToken, {
+    title: 'Past Event',
+    starts_at: new Date(Date.now() - 86400000).toISOString()
+  });
+  assert.equal(pastEvent.status, 400, 'Past-date event is rejected with 400');
+  console.log('✓ Past-date event creation rejected with 400');
+
+  // 2c. Admin creates valid future event
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('INSERT INTO events')) {
+      return { rows: [{ id: 50, title: 'Annual Alumni Meet', venue: 'Campus Auditorium', starts_at: values[4] }] };
+    }
+    if (sql.includes('SELECT id FROM users WHERE id <> $1 AND status = \'active\'')) {
+      return { rows: [{ id: 10 }, { id: 20 }] };
+    }
+    return { rows: [] };
+  };
+
+  const futureDate = new Date(Date.now() + 7 * 86400000).toISOString();
+  const createEvent = await testRequest('/api/events', 'POST', adminToken, {
+    title: 'Annual Alumni Meet',
+    description: 'Welcome back alumni!',
+    venue: 'Campus Auditorium',
+    starts_at: futureDate
+  });
+  assert.equal(createEvent.status, 201);
+  assert.equal(createEvent.data.title, 'Annual Alumni Meet');
+  console.log('✓ Admin can create a valid future event');
+
+  // 2d. Listing events with attendee count and user registration status
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM events e') && sql.includes('JOIN users u')) {
+      return { rows: [{
+        id: 50,
+        title: 'Annual Alumni Meet',
+        created_by_name: 'Admin One',
+        attendee_count: 5,
+        registered: false,
+        starts_at: futureDate
+      }] };
+    }
+    return { rows: [] };
+  };
+
+  const listEvents = await testRequest('/api/events', 'GET', studentToken);
+  assert.equal(listEvents.status, 200);
+  assert.equal(listEvents.data[0].attendee_count, 5);
+  assert.equal(listEvents.data[0].registered, false);
+  console.log('✓ Event listing provides attendee count and per-user registered status');
+
+  // 2e. Student registers for event
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM events') && sql.includes('starts_at > NOW()')) {
+      return { rows: [{ id: 50, title: 'Annual Alumni Meet', created_by: 1 }] };
+    }
+    if (sql.includes('FROM event_registrations') && sql.includes('event_id = $1')) {
+      return { rows: [] }; // No duplicate
+    }
+    if (sql.includes('INSERT INTO event_registrations')) {
+      return { rows: [{ id: 701, event_id: 50, user_id: 10 }] };
+    }
+    return { rows: [] };
+  };
+
+  const registerEvent = await testRequest('/api/events/50/register', 'POST', studentToken, {});
+  assert.equal(registerEvent.status, 201);
+  console.log('✓ Student can register for upcoming event');
+
+  // 2f. Duplicate event registration rejected with 409
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM events') && sql.includes('starts_at > NOW()')) {
+      return { rows: [{ id: 50, title: 'Annual Alumni Meet', created_by: 1 }] };
+    }
+    if (sql.includes('FROM event_registrations') && sql.includes('event_id = $1')) {
+      return { rows: [{ id: 701 }] }; // Duplicate!
+    }
+    return { rows: [] };
+  };
+
+  const dupRegister = await testRequest('/api/events/50/register', 'POST', studentToken, {});
+  assert.equal(dupRegister.status, 409, 'Duplicate event registration returns 409');
+  console.log('✓ Duplicate event registration blocked with 409');
+
+  // =========================================================================
+    console.log('\n--- MENTORSHIP & EVENTS TESTS COMPLETED ---\n');
 }
 
 runTests().catch(err => { console.error(err); process.exit(1); });
