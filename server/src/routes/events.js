@@ -117,7 +117,7 @@ router.post(
   active,
   roles('admin', 'alumni'),
   asyncRoute(async (req, res) => {
-    const title = text(req.body.title);
+    const title = text(req.body.title).slice(0, 180);
     const starts = req.body.starts_at;
 
     if (!title) {
