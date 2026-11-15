@@ -544,12 +544,25 @@ function Applicants({items,run}) {
 }
 function Events({items,role,form,setForm,run}) {
   const [showForm,setShowForm]=useState(false), canCreate=['admin','alumni'].includes(role);
+  const [tab,setTab]=useState('all');
   const set=(key,value)=>setForm(old=>({...old,[key]:value}));
   const submit=async e=>{e.preventDefault();const ok=await run('/events','POST',form);if(ok){setShowForm(false);setForm({title:'',description:'',venue:'Campus',starts_at:''});}};
+  const filtered = items.filter(item => {
+    if (tab === 'upcoming') return new Date(item.starts_at) >= new Date();
+    if (tab === 'registered') return item.registered;
+    return true;
+  });
   return <div className="content-stack">
     {canCreate&&<div className="action-strip"><div><strong>Bring the community together</strong><p>Create a reunion, career talk, workshop or networking event.</p></div><button className="primary-btn" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/>{showForm?'Close form':'Create event'}</button></div>}
     {showForm&&<form className="panel form-panel" onSubmit={submit}><div className="panel-heading"><div><span className="eyebrow">COMMUNITY CALENDAR</span><h3>Schedule an event</h3></div></div><div className="form-grid"><Field label="Event title" value={form.title} onChange={v=>set('title',v)} required/><Field label="Venue or meeting link" value={form.venue} onChange={v=>set('venue',v)}/><Field label="Date and time" type="datetime-local" value={form.starts_at} onChange={v=>set('starts_at',v)} required/><div className="span-two"><Field label="Description" rows={3} value={form.description} onChange={v=>set('description',v)}/></div></div><button className="primary-btn">Publish event <ArrowRight size={15}/></button></form>}
-    {items.length?<div className="event-grid">{items.map(item=><article className="event-card" key={item.id}><div className="event-date"><b>{new Date(item.starts_at).getDate()}</b><span>{new Date(item.starts_at).toLocaleString('en',{month:'short'})}</span></div><div className="event-copy"><span className="eyebrow">COMMUNITY EVENT</span><h3>{item.title}</h3><p>{item.description}</p><div className="event-detail"><span><Building2 size={14}/> {item.venue}</span><span><Users size={14}/> {item.attendee_count||0} attending</span><span><CalendarDays size={14}/> {dateTimeText(item.starts_at)}</span></div><small>Organised by {item.created_by_name}</small></div><div className="event-join">{item.registered?<span className="registered"><Check size={15}/> Registered</span>:['student','alumni'].includes(role)?<button className="primary-btn small" onClick={()=>run('/events/'+item.id+'/register','POST',{})}>Register <ArrowRight size={14}/></button>:<span className="muted">View event</span>}</div></article>)}</div>:<Empty title="No events scheduled" detail="Community events will appear here once created by alumni or administrators."/>}
+    <div className="directory-toolbar">
+      <div style={{display:'flex',gap:'6px'}}>
+        <button type="button" className={'outline-btn small ' + (tab==='all'?'active':'')} onClick={()=>setTab('all')}>All events ({items.length})</button>
+        <button type="button" className={'outline-btn small ' + (tab==='upcoming'?'active':'')} onClick={()=>setTab('upcoming')}>Upcoming</button>
+        {['student','alumni'].includes(role)&&<button type="button" className={'outline-btn small ' + (tab==='registered'?'active':'')} onClick={()=>setTab('registered')}>Registered</button>}
+      </div>
+    </div>
+    {filtered.length?<div className="event-grid">{filtered.map(item=><article className="event-card" key={item.id}><div className="event-date"><b>{new Date(item.starts_at).getDate()}</b><span>{new Date(item.starts_at).toLocaleString('en',{month:'short'})}</span></div><div className="event-copy"><span className="eyebrow">COMMUNITY EVENT</span><h3>{item.title}</h3><p>{item.description}</p><div className="event-detail"><span><Building2 size={14}/> {item.venue}</span><span><Users size={14}/> {item.attendee_count||0} attending</span><span><CalendarDays size={14}/> {dateTimeText(item.starts_at)}</span></div><small>Organised by {item.created_by_name}</small></div><div className="event-join">{item.registered?<span className="registered"><Check size={15}/> Registered</span>:['student','alumni'].includes(role)?<button className="primary-btn small" onClick={()=>run('/events/'+item.id+'/register','POST',{})}>Register <ArrowRight size={14}/></button>:<span className="muted">View event</span>}</div></article>)}</div>:<Empty title="No events scheduled" detail="Community events will appear here once created by alumni or administrators."/>}
   </div>;
 }
 function CareerHistory({items,form,setForm,run}) {
