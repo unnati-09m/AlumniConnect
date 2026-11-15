@@ -147,4 +147,31 @@ router.post(
   })
 );
 
+// ---------------------------------------------------------------------------
+// DELETE /:id — delete an announcement (active admin only)
+// ---------------------------------------------------------------------------
+router.delete(
+  '/:id',
+  auth,
+  active,
+  roles('admin'),
+  asyncRoute(async (req, res) => {
+    const announcementId = Number(req.params.id);
+    if (!announcementId) {
+      return res.status(400).json({ message: 'Invalid announcement ID.' });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM announcements WHERE id = $1 RETURNING id`,
+      [announcementId]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'Announcement not found.' });
+    }
+
+    return res.json({ message: 'Announcement deleted successfully.' });
+  })
+);
+
 export default router;
