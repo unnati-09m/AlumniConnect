@@ -125,13 +125,18 @@ router.get(
   auth,
   active,
   roles('admin'),
-  asyncRoute(async (_req, res) => {
-    const result = await pool.query(
-      `SELECT d.*, u.name AS alumni_name, u.email
+  asyncRoute(async (req, res) => {
+    const { status } = req.query;
+    let sql = `SELECT d.*, u.name AS alumni_name, u.email
        FROM donation_pledges d
-       JOIN users u ON u.id = d.alumni_id
-       ORDER BY d.created_at DESC`
-    );
+       JOIN users u ON u.id = d.alumni_id`;
+    const params = [];
+    if (status && VALID_STATUSES.includes(status)) {
+      sql += ` WHERE d.status = $1`;
+      params.push(status);
+    }
+    sql += ` ORDER BY d.created_at DESC`;
+    const result = await pool.query(sql, params);
     return res.json(result.rows);
   })
 );
