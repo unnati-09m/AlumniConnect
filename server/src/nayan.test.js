@@ -327,7 +327,124 @@ async function runTests() {
   console.log('✓ Duplicate event registration blocked with 409');
 
   // =========================================================================
-    console.log('\n--- MENTORSHIP & EVENTS TESTS COMPLETED ---\n');
+  // 3. User Notifications Feed
+  // =========================================================================
+  console.log('\n[ 3 ] Notifications Feed Tests');
+
+  // 3a. User fetches their scoped notifications
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM notifications') && sql.includes('WHERE user_id = $1')) {
+      return { rows: [
+        { id: 1, title: 'Mentorship accepted', body: 'Session confirmed', is_read: false, created_at: new Date().toISOString() },
+        { id: 2, title: 'New event', body: 'Alumni meet', is_read: true, created_at: new Date(Date.now() - 3600000).toISOString() }
+      ] };
+    }
+    return { rows: [] };
+  };
+
+  const getNotifs = await testRequest('/api/notifications', 'GET', studentToken);
+  assert.equal(getNotifs.status, 200);
+  assert.equal(getNotifs.data.length, 2);
+  console.log('✓ Notifications scoped to user returned');
+
+  // 3b. Unread count endpoint
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM notifications') && sql.includes('is_read = FALSE')) {
+      return { rows: [{ count: 1 }] };
+    }
+    return { rows: [] };
+  };
+
+  const unreadCount = await testRequest('/api/notifications/unread-count', 'GET', studentToken);
+  assert.equal(unreadCount.status, 200);
+  assert.equal(unreadCount.data.unreadCount, 1);
+  console.log('✓ /unread-count correctly returns active unread tally');
+
+  // 3c. Mark single notification as read
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('UPDATE notifications') && sql.includes('SET is_read = TRUE') && sql.includes('WHERE id = $1 AND user_id = $2')) {
+      return { rows: [{ id: 1, is_read: true }] };
+    }
+    return { rows: [] };
+  };
+
+  const markRead = await testRequest('/api/notifications/1/read', 'PATCH', studentToken, {});
+  assert.equal(markRead.status, 200);
+  assert.equal(markRead.data.is_read, true);
+  console.log('✓ Single notification mark as read verified');
+
+  // 3d. Cross-user notification security: cannot mark another user\'s notification
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('UPDATE notifications') && sql.includes('SET is_read = TRUE') && sql.includes('WHERE id = $1 AND user_id = $2')) {
+      return { rows: [] }; // Not found for this user_id
+    }
+    return { rows: [] };
+  };
+
+  const crossMark = await testRequest('/api/notifications/999/read', 'PATCH', studentToken, {});
+  assert.equal(crossMark.status, 404, 'Cannot mark other users notification');
+  console.log('✓ Cross-user notification protection verified (404)');
+
+  // 3e. Mark all notifications as read
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('UPDATE notifications') && sql.includes('SET is_read = TRUE') && sql.includes('user_id = $1')) {
+      return { rows: [] };
+    }
+    return { rows: [] };
+  };
+
+  const markAll = await testRequest('/api/notifications/mark-all-read', 'PATCH', studentToken, {});
+  assert.equal(markAll.status, 200);
+  console.log('✓ Mark all notifications as read verified');
+
+  // =========================================================================
+  // 4. Announcements Broadcast
+  // =========================================================================
+  console.log('\n[ 4 ] Announcements Tests');
+
+  // 4a. Students blocked from posting announcements
+  const studentAnn = await testRequest('/api/announcements', 'POST', studentToken, {
+    title: 'Hello',
+    body: 'World'
+  });
+  assert.equal(studentAnn.status, 403, 'Students cannot publish announcements');
+  console.log('✓ Student blocked from creating announcements (403)');
+
+  // 4b. Admin creates announcement
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('INSERT INTO announcements')) {
+      return { rows: [{ id: 1, title: 'Campus Update', body: 'Campus open.', audience: values[3] }] };
+    }
+    if (sql.includes('SELECT id FROM users WHERE id <> $1')) {
+      return { rows: [{ id: 10 }, { id: 20 }] };
+    }
+    return { rows: [] };
+  };
+
+  const createAnn = await testRequest('/api/announcements', 'POST', adminToken, {
+    title: 'Campus Update',
+    body: 'Campus open.',
+    audience: 'all'
+  });
+  assert.equal(createAnn.status, 201);
+  console.log('✓ Admin can publish announcements');
+
+  // 4c. Audience filtering: student only sees 'all' or 'students'
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM announcements a') && sql.includes('WHERE a.audience = \'all\' OR a.audience = $1')) {
+      assert.equal(values[0], 'students', 'Student audience filter is "students"');
+      return { rows: [{ id: 1, title: 'For Students', audience: 'students', author: 'Admin' }] };
+    }
+    return { rows: [] };
+  };
+
+  const studentAnns = await testRequest('/api/announcements', 'GET', studentToken);
+  assert.equal(studentAnns.status, 200);
+  assert.equal(studentAnns.data.length, 1);
+  console.log('✓ Role-based audience filtering verified for students');
+
+  // =========================================================================
+    console.log('\n--- ENGAGEMENT COMMS TESTS COMPLETED ---\n');
 }
 
 runTests().catch(err => { console.error(err); process.exit(1); });
