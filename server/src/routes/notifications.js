@@ -51,7 +51,7 @@ router.get(
        WHERE user_id = $1 AND is_read = FALSE`,
       [req.user.id]
     );
-    return res.json({ unreadCount: result.rows[0].count });
+    return res.json({ unreadCount: result.rows[0]?.count ?? 0 });
   })
 );
 // ---------------------------------------------------------------------------
