@@ -149,6 +149,7 @@ router.patch('/users/:id/verification', auth, active, roles('admin'), asyncRoute
  * Aggregates summary statistics across users, mentorship, opportunities, events, donations, and career history.
  */
 router.get('/reports', auth, roles('admin'), asyncRoute(async (_req, res) => {
+  // Aggregated operational metrics across engagement, operations and opportunities
   const [usersResult, mentorshipResult, opportunitiesResult, eventsResult, pledgesResult, careerResult] = await Promise.all([
     pool.query('SELECT role,COUNT(*)::int AS count FROM users GROUP BY role ORDER BY role'),
     pool.query('SELECT status,COUNT(*)::int AS count FROM mentorship_requests GROUP BY status'),
