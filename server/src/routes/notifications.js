@@ -99,4 +99,29 @@ router.patch(
   })
 );
 
+// ---------------------------------------------------------------------------
+// DELETE /:id — delete/dismiss a single notification (owner only)
+// ---------------------------------------------------------------------------
+router.delete(
+  '/:id',
+  auth,
+  asyncRoute(async (req, res) => {
+    const notifId = Number(req.params.id);
+    if (!notifId) {
+      return res.status(400).json({ message: 'Invalid notification ID.' });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM notifications WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [notifId, req.user.id]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'Notification not found.' });
+    }
+
+    return res.json({ message: 'Notification deleted successfully.' });
+  })
+);
+
 export default router;
