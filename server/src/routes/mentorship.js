@@ -204,7 +204,9 @@ router.get(
 
 // ---------------------------------------------------------------------------
 // PATCH /:id — alumnus updates the status of a request directed at them
-//   Permitted transitions:
+//   Permitted lifecycle transitions:
+//     pending  -> accepted | declined
+//     accepted -> declined | completed
 //     pending  → accepted | declined
 //     accepted → declined | completed
 // ---------------------------------------------------------------------------
