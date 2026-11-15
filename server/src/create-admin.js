@@ -44,24 +44,24 @@ async function askHiddenPassword(prompt) {
     const onData = (chunk) => {
       const key = chunk.toString('utf8');
 
-      if (key === '\\u0003') {
+      if (key === '\u0003') {
         cleanup();
         reject(new Error('Admin creation cancelled.'));
         return;
       }
 
-      if (key === '\\r' || key === '\\n') {
+      if (key === '\r' || key === '\n') {
         cleanup();
         resolve(password);
         return;
       }
 
-      if (key === '\\u007f' || key === '\\b') {
+      if (key === '\u007f' || key === '\b') {
         password = password.slice(0, -1);
         return;
       }
 
-      if (key >= ' ' && key !== '\\u007f') {
+      if (key >= ' ' && key !== '\u007f') {
         password += key;
       }
     };
@@ -81,12 +81,8 @@ async function provisionAdmin() {
   let email = args.email || process.env.ADMIN_EMAIL || '';
 
   try {
-    if (!name) {
-      name = (await rl.question('Admin full name: ')).trim();
-    }
-    if (!email) {
-      email = (await rl.question('Institutional admin email: ')).trim();
-    }
+    if (!name) name = (await rl.question('Admin full name: ')).trim();
+    if (!email) email = (await rl.question('Institutional admin email: ')).trim();
   } finally {
     rl.close();
   }
@@ -95,7 +91,7 @@ async function provisionAdmin() {
   email = email.trim().toLowerCase();
 
   if (!name) throw new Error('Admin name is required.');
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Enter a valid email address.');
   }
 
@@ -108,17 +104,15 @@ async function provisionAdmin() {
 
   try {
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, status)
-       VALUES ($1, $2, $3, 'admin', 'active')
-       RETURNING id, name, email, role, status`,
+      'INSERT INTO users (name, email, password_hash, role, status) VALUES ($1, $2, $3, \'admin\', \'active\') RETURNING id, name, email, role, status',
       [name, email, passwordHash]
     );
 
     const admin = result.rows[0];
     console.log('Admin account created successfully.');
-    console.log(`Name: ${admin.name}`);
-    console.log(`Email: ${admin.email}`);
-    console.log(`Role: ${admin.role}`);
+    console.log('Name: ' + admin.name);
+    console.log('Email: ' + admin.email);
+    console.log('Role: ' + admin.role);
     console.log('Keep the password private. It was not printed or stored in this repository.');
   } catch (error) {
     if (error.code === '23505') {
