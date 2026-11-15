@@ -9,6 +9,7 @@ import {
 // Backend API Base URL (uses environment variable if defined, otherwise defaults to relative /api)
 const API = (import.meta.env.VITE_API_URL || '') + '/api';
 const DEMO_PASSWORD = 'Demo@123';
+const IS_DEVELOPMENT = import.meta.env.DEV;
 
 /**
  * request helper:
@@ -121,7 +122,7 @@ export default function App() {
   const [careerHistory,setCareerHistory] = useState([]);
   const [search,setSearch] = useState('');
   const [authMode,setAuthMode] = useState('login');
-  const [login,setLogin] = useState({email:'student@alumniconnect.test',password:DEMO_PASSWORD});
+  const [login,setLogin] = useState(() => IS_DEVELOPMENT ? {email:'student@alumniconnect.test',password:DEMO_PASSWORD} : {email:'',password:''});
   const [register,setRegister] = useState({name:'',email:'',password:'',role:'student',student_id:'',department:'',degree:'',current_year:'',graduation_year:'',company:'',job_title:'',location:'',linkedin_url:''});
   const [profileDraft,setProfileDraft] = useState({});
   const [mentorTarget,setMentorTarget] = useState(null);
@@ -318,9 +319,9 @@ function AuthScreen({authMode,setAuthMode,login,setLogin,register,setRegister,si
           <Field label="Password" type="password" value={login.password} onChange={v=>setLogin({...login,password:v})} required placeholder="Enter your password"/>
           <button className="primary-btn full" disabled={busy}>{busy?'Signing in…':'Sign in'} <ArrowRight size={17}/></button>
         </form>
-        <div className="demo-login"><strong>Demo access</strong><p>Try a role to explore the sample workspace.</p><div className="demo-chips">
+        {IS_DEVELOPMENT && <div className="demo-login"><strong>Demo access</strong><p>Try a role to explore the sample workspace.</p><div className="demo-chips">
           {['student','alumni','admin'].map(role=><button key={role} onClick={()=>setLogin({email:role+'@alumniconnect.test',password:DEMO_PASSWORD})}>{pretty(role)}</button>)}
-        </div><small>Password for demo accounts: {DEMO_PASSWORD}</small></div>
+        </div><small>Password for demo accounts: {DEMO_PASSWORD}</small></div>}
       </>:<>
         <span className="eyebrow">JOIN YOUR COMMUNITY</span><h2>Create your account</h2><p className="muted">Choose your role and share the details needed for your profile.</p>
         {error&&<div className="alert error">{error}</div>}
