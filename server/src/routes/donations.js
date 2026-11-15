@@ -66,7 +66,7 @@ router.post(
   roles('alumni'),
   asyncRoute(async (req, res) => {
     const amount = Number(req.body.amount);
-    const purpose = text(req.body.purpose);
+    const purpose = text(req.body.purpose).slice(0, 180);
     const note = text(req.body.note);
 
     if (!(amount > 0) || !Number.isFinite(amount)) {
