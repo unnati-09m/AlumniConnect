@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "db:setup": "node src/setup.js",
     "seed": "node src/seed.js",
+    "admin:create": "node src/create-admin.js",
     "test:smoke": "node src/smoke-test.js"
   },
   "dependencies": {
