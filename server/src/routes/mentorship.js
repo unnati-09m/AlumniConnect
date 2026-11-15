@@ -54,7 +54,7 @@ router.post(
   roles('student'),
   asyncRoute(async (req, res) => {
     const alumniId = Number(req.body.alumni_id);
-    const topic = text(req.body.topic);
+    const topic = text(req.body.topic).slice(0, 180);
     const message = text(req.body.message);
 
     if (!alumniId || !topic) {
