@@ -80,7 +80,7 @@ router.get(
   auth,
   asyncRoute(async (req, res) => {
     const eventId = Number(req.params.id);
-    if (!eventId) {
+    if (!eventId || !Number.isInteger(eventId)) {
       return res.status(400).json({ message: 'Invalid event ID.' });
     }
 
@@ -170,7 +170,7 @@ router.post(
   roles('student', 'alumni'),
   asyncRoute(async (req, res) => {
     const eventId = Number(req.params.id);
-    if (!eventId) {
+    if (!eventId || !Number.isInteger(eventId)) {
       return res.status(400).json({ message: 'Invalid event ID.' });
     }
 
