@@ -108,7 +108,7 @@ router.post(
     }
 
     // Strictly enforce the three supported audience values
-    const VALID_AUDIENCES = ['all', 'students', 'alumni'];
+    const VALID_AUDIENCES = Object.freeze(['all', 'students', 'alumni']);
     const audience = VALID_AUDIENCES.includes(rawAudience) ? rawAudience : 'all';
 
     const result = await pool.query(
