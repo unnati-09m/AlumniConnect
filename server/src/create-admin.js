@@ -1,19 +1,11 @@
 /**
- * Secure Admin Provisioning CLI for AlumniConnect
- * -----------------------------------------------
- * Provisions an administrator account directly in the database.
- * Uses bcrypt (12 salt rounds) for password hashing.
- * Never exposes admin registration through the public API.
+ * Secure one-time Admin Provisioning CLI for AlumniConnect.
  *
- * Usage:
- *   # Interactive prompt:
- *   node server/src/create-admin.js
+ * Run from the repository root with:
+ *   npm run admin:create
  *
- *   # Command-line arguments:
- *   node server/src/create-admin.js --name "Admin Name" --email "admin@example.com" --password "SecurePass123"
- *
- *   # Environment variables:
- *   ADMIN_NAME="Admin Name" ADMIN_EMAIL="admin@example.com" ADMIN_PASSWORD="SecurePass123" node server/src/create-admin.js
+ * Password input is hidden. Existing accounts are never modified.
+ * Never use this script to seed demo or sample data.
  */
 
 import './load-env.js';
@@ -24,102 +16,121 @@ import { pool } from './db.js';
 
 function parseArgs(args) {
   const parsed = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if ((arg === '--name' || arg === '-n') && args[i + 1]) {
+  for (let i = 0; i < args.length; i += 1) {
+    if ((args[i] === '--name' || args[i] === '-n') && args[i + 1]) {
       parsed.name = args[++i];
-    } else if ((arg === '--email' || arg === '-e') && args[i + 1]) {
+    } else if ((args[i] === '--email' || args[i] === '-e') && args[i + 1]) {
       parsed.email = args[++i];
-    } else if ((arg === '--password' || arg === '-p') && args[i + 1]) {
-      parsed.password = args[++i];
     }
   }
   return parsed;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+async function askHiddenPassword(prompt) {
+  if (!input.isTTY || typeof input.setRawMode !== 'function') {
+    throw new Error('Run npm run admin:create in an interactive terminal so the password can be entered securely.');
+  }
+
+  return new Promise((resolve, reject) => {
+    let password = '';
+    const previousRawMode = Boolean(input.isRaw);
+
+    const cleanup = () => {
+      input.off('data', onData);
+      input.setRawMode(previousRawMode);
+      output.write('\n');
+    };
+
+    const onData = (chunk) => {
+      const key = chunk.toString('utf8');
+
+      if (key === '\\u0003') {
+        cleanup();
+        reject(new Error('Admin creation cancelled.'));
+        return;
+      }
+
+      if (key === '\\r' || key === '\\n') {
+        cleanup();
+        resolve(password);
+        return;
+      }
+
+      if (key === '\\u007f' || key === '\\b') {
+        password = password.slice(0, -1);
+        return;
+      }
+
+      if (key >= ' ' && key !== '\\u007f') {
+        password += key;
+      }
+    };
+
+    output.write(prompt);
+    input.setRawMode(true);
+    input.resume();
+    input.on('data', onData);
+  });
+}
 
 async function provisionAdmin() {
-  const cliArgs = parseArgs(process.argv.slice(2));
+  const args = parseArgs(process.argv.slice(2));
+  const rl = readline.createInterface({ input, output });
 
-  let name = cliArgs.name || process.env.ADMIN_NAME;
-  let email = cliArgs.email || process.env.ADMIN_EMAIL;
-  let password = cliArgs.password || process.env.ADMIN_PASSWORD;
+  let name = args.name || process.env.ADMIN_NAME || '';
+  let email = args.email || process.env.ADMIN_EMAIL || '';
 
-  // If interactive terminal and missing fields, prompt user
-  if ((!name || !email || !password) && input.isTTY) {
-    const rl = readline.createInterface({ input, output });
-    try {
-      if (!name) {
-        name = await rl.question('Enter Admin Full Name [System Administrator]: ');
-        name = name.trim() || 'System Administrator';
-      }
-      if (!email) {
-        email = await rl.question('Enter Admin Email Address: ');
-        email = email.trim();
-      }
-      if (!password) {
-        password = await rl.question('Enter Admin Password (min 8 chars): ');
-      }
-    } finally {
-      rl.close();
+  try {
+    if (!name) {
+      name = (await rl.question('Admin full name: ')).trim();
     }
+    if (!email) {
+      email = (await rl.question('Institutional admin email: ')).trim();
+    }
+  } finally {
+    rl.close();
   }
 
-  name = (name || '').trim();
-  email = (email || '').trim().toLowerCase();
+  name = name.trim();
+  email = email.trim().toLowerCase();
 
-  if (!name) {
-    console.error('Error: Admin name is required.');
-    process.exit(1);
+  if (!name) throw new Error('Admin name is required.');
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    throw new Error('Enter a valid email address.');
   }
 
-  if (!email || !EMAIL_REGEX.test(email)) {
-    console.error('Error: A valid email address is required.');
-    process.exit(1);
+  const password = await askHiddenPassword('Admin password (minimum 12 characters; input hidden): ');
+  if (password.length < 12) {
+    throw new Error('Choose a password with at least 12 characters.');
   }
 
-  if (!password || typeof password !== 'string' || password.length < 8) {
-    console.error('Error: Admin password must be at least 8 characters long.');
-    process.exit(1);
-  }
-
-  console.log(`Provisioning admin account for: ${email}`);
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
     const result = await pool.query(
       `INSERT INTO users (name, email, password_hash, role, status)
        VALUES ($1, $2, $3, 'admin', 'active')
-       ON CONFLICT (email) DO UPDATE
-       SET name = EXCLUDED.name,
-           password_hash = EXCLUDED.password_hash,
-           role = 'admin',
-           status = 'active',
-           updated_at = NOW()
-       RETURNING id, name, email, role, status, created_at`,
+       RETURNING id, name, email, role, status`,
       [name, email, passwordHash]
     );
 
-    const user = result.rows[0];
-    console.log('\n=============================================');
-    console.log('✓ Administrator account provisioned successfully!');
-    console.log('=============================================');
-    console.log(`ID:     ${user.id}`);
-    console.log(`Name:   ${user.name}`);
-    console.log(`Email:  ${user.email}`);
-    console.log(`Role:   ${user.role}`);
-    console.log(`Status: ${user.status}`);
-    console.log('=============================================\n');
-  } catch (err) {
-    console.error('Database error provisioning admin:', err.message);
-    process.exit(1);
+    const admin = result.rows[0];
+    console.log('Admin account created successfully.');
+    console.log(`Name: ${admin.name}`);
+    console.log(`Email: ${admin.email}`);
+    console.log(`Role: ${admin.role}`);
+    console.log('Keep the password private. It was not printed or stored in this repository.');
+  } catch (error) {
+    if (error.code === '23505') {
+      throw new Error('An account with this email already exists. No existing account was changed. Use a different institutional email.');
+    }
+    throw new Error('Admin account could not be created. Check the database connection and schema, then retry.');
   } finally {
     await pool.end();
   }
 }
 
-provisionAdmin().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
+provisionAdmin().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
 });
