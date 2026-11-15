@@ -63,6 +63,12 @@ router.post(
         .json({ message: 'Select an alumnus and enter a mentorship topic.' });
     }
 
+    if (req.user.id === alumniId) {
+      return res
+        .status(400)
+        .json({ message: 'You cannot request mentorship from yourself.' });
+    }
+
     // Confirm the target is an active, verified, public alumnus
     const mentor = await pool.query(
       `SELECT u.id, u.name
