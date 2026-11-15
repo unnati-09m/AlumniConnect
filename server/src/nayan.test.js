@@ -444,7 +444,163 @@ async function runTests() {
   console.log('✓ Role-based audience filtering verified for students');
 
   // =========================================================================
-    console.log('\n--- ENGAGEMENT COMMS TESTS COMPLETED ---\n');
+  // 5. Donation Pledge Tracking
+  // =========================================================================
+  console.log('\n[ 5 ] Donation Pledge Tracking Tests');
+
+  // 5a. Student cannot create pledge
+  const studentPledge = await testRequest('/api/donation-pledges', 'POST', studentToken, {
+    amount: 1000,
+    purpose: 'Scholarships'
+  });
+  assert.equal(studentPledge.status, 403, 'Student cannot submit donation pledge (403)');
+  console.log('✓ Student blocked from submitting donation pledges (403)');
+
+  // 5b. Invalid / zero amount rejected
+  const zeroPledge = await testRequest('/api/donation-pledges', 'POST', alumniToken, {
+    amount: 0,
+    purpose: 'Scholarships'
+  });
+  assert.equal(zeroPledge.status, 400, 'Zero amount pledge is rejected with 400');
+  console.log('✓ Invalid amount pledge rejected with 400');
+
+  // 5c. Alumni creates donation pledge
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('INSERT INTO donation_pledges')) {
+      return { rows: [{ id: 801, alumni_id: 20, amount: '5000.00', purpose: 'Robotics Lab', status: 'interested' }] };
+    }
+    if (sql.includes('SELECT id FROM users WHERE role = \'admin\' AND status = \'active\'')) {
+      return { rows: [{ id: 1 }] };
+    }
+    return { rows: [] };
+  };
+
+  const createPledge = await testRequest('/api/donation-pledges', 'POST', alumniToken, {
+    amount: 5000,
+    purpose: 'Robotics Lab',
+    note: 'Pledged support.'
+  });
+  assert.equal(createPledge.status, 201);
+  assert.equal(createPledge.data.status, 'interested');
+  console.log('✓ Alumni can submit donation pledge expression of interest');
+
+  // 5d. Alumni can view their own pledges via /mine
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM donation_pledges') && sql.includes('alumni_id = $1')) {
+      return { rows: [{ id: 801, amount: '5000.00', purpose: 'Robotics Lab', status: 'interested' }] };
+    }
+    return { rows: [] };
+  };
+
+  const myPledges = await testRequest('/api/donation-pledges/mine', 'GET', alumniToken);
+  assert.equal(myPledges.status, 200);
+  assert.equal(myPledges.data.length, 1);
+  console.log('✓ Alumni can view their own pledge history via /mine');
+
+  // 5e. Admin can list all pledges
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM donation_pledges d') && sql.includes('JOIN users u')) {
+      return { rows: [{ id: 801, alumni_name: 'Alumni Twenty', amount: '5000.00', status: 'interested' }] };
+    }
+    return { rows: [] };
+  };
+
+  const adminPledges = await testRequest('/api/donation-pledges', 'GET', adminToken);
+  assert.equal(adminPledges.status, 200);
+  assert.equal(adminPledges.data.length, 1);
+  console.log('✓ Admin can list all community donation pledges');
+
+  // 5f. Admin updates pledge follow-up status
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('UPDATE donation_pledges') && sql.includes('status = $1') && sql.includes('WHERE id = $2')) {
+      return { rows: [{ id: 801, status: values[0] }] };
+    }
+    return { rows: [] };
+  };
+
+  const updatePledge = await testRequest('/api/donation-pledges/801', 'PATCH', adminToken, { status: 'contacted' });
+  assert.equal(updatePledge.status, 200);
+  assert.equal(updatePledge.data.status, 'contacted');
+  console.log('✓ Admin can update pledge status to contacted or fulfilled');
+
+  // =========================================================================
+  // 6. Admin Permissions, Approvals & Reporting
+  // =========================================================================
+  console.log('\n[ 6 ] Admin Approvals & Reporting Tests');
+
+  // 6a. Admin user listing
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM users u LEFT JOIN alumni_profiles p')) {
+      return { rows: [
+        { id: 21, name: 'Alumni Pending', role: 'alumni', status: 'pending', is_verified: false },
+        { id: 20, name: 'Alumni Twenty', role: 'alumni', status: 'active', is_verified: true }
+      ] };
+    }
+    return { rows: [] };
+  };
+
+  const adminUsers = await testRequest('/api/admin/users', 'GET', adminToken);
+  assert.equal(adminUsers.status, 200);
+  assert.equal(adminUsers.data.length, 2);
+  console.log('✓ Admin user listing returns pending and active members');
+
+  // 6b. Admin alumni verification approval
+  mockResponses.clientHandler = (sql, values) => {
+    if (sql.includes('SELECT id,role,status FROM users WHERE id=$1')) {
+      return { rows: [{ id: 21, role: 'alumni', status: 'pending' }] };
+    }
+    if (sql.includes('UPDATE alumni_profiles SET is_verified=$1')) {
+      return { rows: [] };
+    }
+    if (sql.includes('UPDATE users SET status=$1 WHERE id=$2')) {
+      return { rows: [] };
+    }
+    return { rows: [] };
+  };
+
+  const approveRes = await testRequest('/api/admin/users/21/verification', 'PATCH', adminToken, {
+    decision: 'approve',
+    notes: 'Graduation verified'
+  });
+  assert.equal(approveRes.status, 200);
+  assert.equal(approveRes.data.status, 'active');
+  console.log('✓ Admin atomic alumni verification approval verified');
+
+  // 6c. Aggregated Institutional Reports
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('FROM users GROUP BY role')) {
+      return { rows: [{ role: 'student', count: 10 }, { role: 'alumni', count: 5 }] };
+    }
+    if (sql.includes('FROM mentorship_requests GROUP BY status')) {
+      return { rows: [{ status: 'accepted', count: 4 }] };
+    }
+    if (sql.includes('FROM opportunities GROUP BY type')) {
+      return { rows: [{ type: 'internship', count: 3 }] };
+    }
+    if (sql.includes('FROM event_registrations')) {
+      return { rows: [{ registrations: 12 }] };
+    }
+    if (sql.includes('FROM donation_pledges GROUP BY status')) {
+      return { rows: [{ status: 'interested', count: 2, amount: '10000.00' }] };
+    }
+    if (sql.includes('FROM career_history')) {
+      return { rows: [{ count: 8 }] };
+    }
+    return { rows: [] };
+  };
+
+  const reports = await testRequest('/api/admin/reports', 'GET', adminToken);
+  assert.equal(reports.status, 200);
+  assert.equal(reports.data.eventRegistrations, 12);
+  assert.equal(reports.data.careerEntries, 8);
+  assert.equal(reports.data.mentorshipByStatus.length, 1);
+  assert.equal(reports.data.pledgesByStatus.length, 1);
+  console.log('✓ Admin reports aggregated metrics across mentorship, events, donations and operations verified');
+
+  console.log('\n--- ALL NAYAN JYOTI ENGAGEMENT & OPERATIONS TESTS PASSED SUCCESSFULLY! ---\n');
 }
 
-runTests().catch(err => { console.error(err); process.exit(1); });
+runTests().catch((err) => {
+  console.error('\n✗ TEST RUN FAILED:', err);
+  process.exit(1);
+});
