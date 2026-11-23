@@ -130,6 +130,7 @@ pool.query = async (sql, values = []) => {
     return { rows: [{ count: 12 }] };
   }
   if (sql.includes('SELECT u.name,u.email,p.graduation_year,p.department,p.degree,p.company,p.job_title,p.location,p.is_verified FROM users u JOIN alumni_profiles p')) {
+    assert.ok(sql.includes("WHERE p.is_verified=TRUE AND p.is_public=TRUE AND u.status='active'"), 'CSV export includes only verified, public and active alumni');
     return {
       rows: [
         { name: 'Alumni Active', email: 'alumni.active@alumniconnect.test', graduation_year: 2021, department: 'ECE', degree: 'B.Tech', company: 'Microsoft', job_title: 'SDE', location: 'Bengaluru', is_verified: true }
