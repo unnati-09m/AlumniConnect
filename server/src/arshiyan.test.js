@@ -83,6 +83,7 @@ async function runTests() {
   // 1. Alumni Directory listing
   mockResponses.handler = (sql, values) => {
     if (sql.includes('FROM alumni_profiles')) {
+      assert.ok(sql.includes("p.is_public=TRUE AND p.is_verified=TRUE AND u.status='active'"), 'directory excludes private, pending and unverified alumni for all roles');
       return {
         rows: [
           { id: 20, name: 'Test Alumni', department: 'Computer Science', graduation_year: 2022, company: 'Google', job_title: 'SWE', is_verified: true, is_public: true }
