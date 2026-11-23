@@ -678,6 +678,8 @@ function UserManagement({items,run}) {
                         <button className="primary-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'approve' })}>Approve</button>
                         <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/verification', 'PATCH', { decision: 'reject' })}>Reject</button>
                       </>
+                    ) : item.role === 'alumni' && item.status === 'suspended' && !item.is_verified ? (
+                      <span className="muted" style={{fontSize:'12px'}}>Rejected — verification required</span>
                     ) : item.role !== 'admin' ? (
                       <button className="outline-btn tiny" onClick={() => run('/admin/users/' + item.id + '/status', 'PATCH', { status: item.status === 'active' ? 'suspended' : 'active' })}>
                         {item.status === 'active' ? 'Suspend' : 'Reactivate'}

@@ -188,7 +188,22 @@ async function runTests() {
   assert.equal(alumniInbox.data[0].student_name, 'Student Ten');
   console.log('✓ Alumnus can view incoming scoped requests');
 
-  // 1f. Alumnus accepts request
+  // 1f. Pending requests cannot jump directly to completed
+  mockResponses.handler = (sql, values) => {
+    if (sql.includes('UPDATE mentorship_requests') && sql.includes('RETURNING *')) {
+      assert.ok(sql.includes("status = 'pending' AND $1::text IN ('accepted','declined')"), 'pending transition guard is present');
+      assert.ok(sql.includes("status = 'accepted' AND $1::text IN ('declined','completed')"), 'accepted transition guard is present');
+      assert.equal(values[0], 'completed');
+      return { rows: [] };
+    }
+    return { rows: [] };
+  };
+
+  const skipToCompleted = await testRequest('/api/mentorship/101', 'PATCH', alumniToken, { status: 'completed' });
+  assert.equal(skipToCompleted.status, 404, 'Pending request cannot jump directly to completed');
+  console.log('✓ Invalid pending-to-completed transition is blocked');
+
+  // 1g. Alumnus accepts request
   mockResponses.handler = (sql, values) => {
     if (sql.includes('UPDATE mentorship_requests') && sql.includes('RETURNING *')) {
       return { rows: [{ id: 101, student_id: 10, alumni_id: 20, status: 'accepted', topic: 'System Design' }] };
@@ -201,7 +216,7 @@ async function runTests() {
   assert.equal(acceptRes.data.status, 'accepted');
   console.log('✓ Alumnus can transition request from pending to accepted');
 
-  // 1g. Alumnus completes request
+  // 1h. Alumnus completes request
   mockResponses.handler = (sql, values) => {
     if (sql.includes('UPDATE mentorship_requests') && sql.includes('RETURNING *')) {
       return { rows: [{ id: 101, student_id: 10, alumni_id: 20, status: 'completed', topic: 'System Design' }] };
@@ -214,7 +229,7 @@ async function runTests() {
   assert.equal(completeRes.data.status, 'completed');
   console.log('✓ Alumnus can transition request from accepted to completed');
 
-  // 1h. Admin can view all mentorship requests
+  // 1i. Admin can view all mentorship requests
   mockResponses.handler = (sql, values) => {
     if (sql.includes('SELECT m.*') && sql.includes('WHERE TRUE')) {
       return { rows: [

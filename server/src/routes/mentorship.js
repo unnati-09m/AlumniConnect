@@ -234,7 +234,11 @@ router.patch(
        SET status = $1, updated_at = NOW()
        WHERE id        = $2
          AND alumni_id = $3
-         AND status IN ('pending','accepted')
+         AND (
+           (status = 'pending' AND $1::text IN ('accepted','declined'))
+           OR
+           (status = 'accepted' AND $1::text IN ('declined','completed'))
+         )
        RETURNING *`,
       [status, requestId, req.user.id]
     );

@@ -33,9 +33,9 @@ router.get('/', auth, asyncRoute(async (req, res) => {
     year: text(req.query.year)
   };
   const values = [];
-  let where = req.user.role === 'admin'
-    ? 'WHERE TRUE'
-    : "WHERE p.is_public=TRUE AND p.is_verified=TRUE AND u.status='active'";
+  // The directory is a verified/public alumni directory for every role.
+  // Pending and private records remain available to admins in User Management.
+  let where = "WHERE p.is_public=TRUE AND p.is_verified=TRUE AND u.status='active'";
   if (filters.search) {
     values.push('%' + filters.search + '%');
     const n = values.length;
