@@ -277,7 +277,7 @@ export default function App() {
         {page==='Alumni Directory'&&<AlumniDirectory people={filteredAlumni} role={user.role} token={token} onMentor={person=>{setMentorTarget(person);setMentorForm({topic:'Career guidance',message:''});}} onExportCsv={async()=>{
           try { const response=await fetch(API+'/admin/alumni.csv',{headers:{Authorization:'Bearer '+token}}); if(!response.ok)throw new Error('CSV export failed.'); const blob=await response.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='alumni-directory.csv'; a.click(); URL.revokeObjectURL(url); setSuccess('Alumni CSV downloaded.'); } catch(err){setError(err.message);}
         }}/>}
-        {page==='Mentorship'&&<Mentorship items={mentorship} role={user.role} run={run}/>}
+        {page==='Mentorship'&&<Mentorship items={mentorship} role={user.role} run={run} onFindMentor={()=>changePage('Alumni Directory')}/>}
         {page==='Opportunities'&&<Opportunities items={opportunities} role={user.role} user={user} form={jobForm} setForm={setJobForm} run={run}/>}
         {page==='My Applications'&&<MyApplications items={applications}/>}
         {page==='Applicants'&&<Applicants items={managedApplications} run={run}/>}
@@ -458,14 +458,14 @@ function AlumniProfileModal({person,role,token,onMentor,close}) {
   </div>;
 }
 
-function Mentorship({items,role,run}) {
+function Mentorship({items,role,run,onFindMentor}) {
   const [filter,setFilter]=useState('all');
   const list=filter==='all'?items:items.filter(item=>item.status===filter);
   return <section className="panel">
-    <div className="directory-toolbar"><div><h3>{role==='alumni'?'Requests for your guidance':'Mentorship connections'}</h3><p>{role==='alumni'?'Review incoming requests and respond to students.':'Follow the status of student–alumni mentorship requests.'}</p></div><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All statuses</option>{['pending','accepted','declined','completed'].map(v=><option key={v}>{v}</option>)}</select></div>
+    <div className="directory-toolbar"><div><h3>{role==='alumni'?'Requests for your guidance':'Mentorship connections'}</h3><p>{role==='alumni'?'Review incoming requests and respond to students.':'Follow the status of student–alumni mentorship requests.'}</p></div><div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>{role==='student'&&<button type="button" className="primary-btn small" onClick={onFindMentor}>Find a mentor <ArrowRight size={14}/></button>}<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All statuses</option>{['pending','accepted','declined','completed'].map(v=><option key={v}>{v}</option>)}</select></div></div>
     {list.length?<div className="request-list">{list.map(item=><article className="request-card" key={item.id}><Avatar name={role==='alumni'?item.student_name:item.alumni_name}/><div className="request-main"><div className="request-top"><strong>{role==='alumni'?item.student_name:item.alumni_name}</strong><span className={'status-pill '+item.status}>{pretty(item.status)}</span></div><h4>{item.topic}</h4><p>{item.message||'No additional message.'}</p><small>{role==='alumni'?item.student_email||'Student':'Mentorship request'} · {dateText(item.created_at)}</small></div>
       {role==='alumni'&&item.status==='pending'&&<div className="request-actions"><button className="primary-btn small" onClick={()=>run('/mentorship/'+item.id,'PATCH',{status:'accepted'})}><Check size={14}/> Accept</button><button className="outline-btn small" onClick={()=>run('/mentorship/'+item.id,'PATCH',{status:'declined'})}>Decline</button></div>}
-      {role==='alumni'&&item.status==='accepted'&&<button className="outline-btn small" onClick={()=>run('/mentorship/'+item.id,'PATCH',{status:'completed'})}>Mark completed</button>}</article>)}</div>:<Empty title="No mentorship requests" detail={role==='alumni'?'New requests from students will appear here.':'When you connect with a mentor, the requests will be shown here.'}/>}
+      {role==='alumni'&&item.status==='accepted'&&<button className="outline-btn small" onClick={()=>run('/mentorship/'+item.id,'PATCH',{status:'completed'})}>Mark completed</button>}</article>)}</div>:<Empty title="No mentorship requests" detail={role==='alumni'?'New requests from students will appear here.':role==='student'?'Browse verified alumni to send your first mentorship request. You can track every response here.':'Mentorship activity will appear here as students and alumni connect.'}/>}
   </section>;
 }
 
