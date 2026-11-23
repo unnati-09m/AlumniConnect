@@ -274,7 +274,7 @@ export default function App() {
         {busy&&<div className="saving-line">Saving your changes…</div>}
 
         {page==='Overview'&&<Overview role={user.role} user={user} data={dashboard} alumni={alumni} mentorship={mentorship} opportunities={opportunities} events={events} announcements={announcements} managedApplications={managedApplications} go={changePage}/>}
-        {page==='Alumni Directory'&&<AlumniDirectory people={filteredAlumni} role={user.role} onMentor={person=>{setMentorTarget(person);setMentorForm({topic:'Career guidance',message:''});}} onExportCsv={async()=>{
+        {page==='Alumni Directory'&&<AlumniDirectory people={filteredAlumni} role={user.role} token={token} onMentor={person=>{setMentorTarget(person);setMentorForm({topic:'Career guidance',message:''});}} onExportCsv={async()=>{
           try { const response=await fetch(API+'/admin/alumni.csv',{headers:{Authorization:'Bearer '+token}}); if(!response.ok)throw new Error('CSV export failed.'); const blob=await response.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='alumni-directory.csv'; a.click(); URL.revokeObjectURL(url); setSuccess('Alumni CSV downloaded.'); } catch(err){setError(err.message);}
         }}/>}
         {page==='Mentorship'&&<Mentorship items={mentorship} role={user.role} run={run}/>}
@@ -391,7 +391,7 @@ function Overview({role,user,data,alumni,mentorship,opportunities,events,announc
   </div>;
 }
 
-function AlumniDirectory({people,role,onMentor,onExportCsv}) {
+function AlumniDirectory({people,role,token,onMentor,onExportCsv}) {
   const [department,setDepartment]=useState('all');
   const [selectedAlumnus,setSelectedAlumnus]=useState(null);
   const departments=[...new Set(people.map(p=>p.department).filter(Boolean))];
@@ -417,15 +417,17 @@ function AlumniDirectory({people,role,onMentor,onExportCsv}) {
         {person.linkedin_url&&<a className="profile-url" href={person.linkedin_url} target="_blank" rel="noreferrer">LinkedIn profile <ArrowRight size={13}/></a>}
       </div>
     </article>)}</div>:<Empty title="No matching alumni found" detail="Try another name, company or department."/>}
-    {selectedAlumnus&&<AlumniProfileModal person={selectedAlumnus} role={role} onMentor={onMentor} close={()=>setSelectedAlumnus(null)}/>}
+    {selectedAlumnus&&<AlumniProfileModal person={selectedAlumnus} role={role} token={token} onMentor={onMentor} close={()=>setSelectedAlumnus(null)}/>}
   </div>;
 }
 
-function AlumniProfileModal({person,role,onMentor,close}) {
+function AlumniProfileModal({person,role,token,onMentor,close}) {
   const [details,setDetails]=useState(null);
   useEffect(()=>{
-    request('/alumni/'+person.id).then(setDetails).catch(()=>setDetails(person));
-  },[person.id]);
+    let active = true;
+    request('/alumni/'+person.id, token).then(data => { if (active) setDetails(data); }).catch(() => { if (active) setDetails(person); });
+    return () => { active = false; };
+  },[person.id,token]);
 
   const p = details || person;
   return <div className="modal-backdrop" onMouseDown={close}>
@@ -562,7 +564,7 @@ function Events({items,role,form,setForm,run}) {
         {['student','alumni'].includes(role)&&<button type="button" className={'outline-btn small ' + (tab==='registered'?'active':'')} onClick={()=>setTab('registered')}>Registered</button>}
       </div>
     </div>
-    {filtered.length?<div className="event-grid">{filtered.map(item=><article className="event-card" key={item.id}><div className="event-date"><b>{new Date(item.starts_at).getDate()}</b><span>{new Date(item.starts_at).toLocaleString('en',{month:'short'})}</span></div><div className="event-copy"><span className="eyebrow">COMMUNITY EVENT</span><h3>{item.title}</h3><p>{item.description}</p><div className="event-detail"><span><Building2 size={14}/> {item.venue}</span><span><Users size={14}/> {item.attendee_count||0} attending</span><span><CalendarDays size={14}/> {dateTimeText(item.starts_at)}</span></div><small>Organised by {item.created_by_name}</small></div><div className="event-join">{item.registered?<span className="registered"><Check size={15}/> Registered</span>:['student','alumni'].includes(role)?<button className="primary-btn small" onClick={()=>run('/events/'+item.id+'/register','POST',{})}>Register <ArrowRight size={14}/></button>:<span className="muted">View event</span>}</div></article>)}</div>:<Empty title="No events scheduled" detail="Community events will appear here once created by alumni or administrators."/>}
+    {filtered.length?<div className="event-grid">{filtered.map(item=><article className="event-card" key={item.id}><div className="event-date"><b>{new Date(item.starts_at).getDate()}</b><span>{new Date(item.starts_at).toLocaleString('en',{month:'short'})}</span></div><div className="event-copy"><span className="eyebrow">COMMUNITY EVENT</span><h3>{item.title}</h3><p>{item.description}</p><div className="event-detail"><span><Building2 size={14}/> {item.venue}</span><span><Users size={14}/> {item.attendee_count||0} attending</span><span><CalendarDays size={14}/> {dateTimeText(item.starts_at)}</span></div><small>Organised by {item.created_by_name}</small></div><div className="event-join">{item.registered?<span className="registered"><Check size={15}/> Registered</span>:new Date(item.starts_at)<=new Date()?<span className="muted">Registration closed</span>:['student','alumni'].includes(role)?<button className="primary-btn small" onClick={()=>run('/events/'+item.id+'/register','POST',{})}>Register <ArrowRight size={14}/></button>:<span className="muted">View event</span>}</div></article>)}</div>:<Empty title="No events scheduled" detail="Community events will appear here once created by alumni or administrators."/>}
   </div>;
 }
 function CareerHistory({items,form,setForm,run}) {
@@ -777,12 +779,12 @@ function ReportCard({title,rows,label,amount}) {
 function Announcements({items,role,form,setForm,run}) {
   const canPost=role==='admin',set=(key,value)=>setForm(old=>({...old,[key]:value}));
   return <div className="content-stack">{canPost&&<form className="panel form-panel" onSubmit={async e=>{e.preventDefault();const ok=await run('/announcements','POST',form);if(ok)setForm({title:'',body:'',audience:'all'});}}><div className="panel-heading"><div><span className="eyebrow">INSTITUTIONAL COMMUNICATION</span><h3>Publish an announcement</h3></div></div><div className="form-grid"><Field label="Announcement title" value={form.title} onChange={v=>set('title',v)} required/><Field label="Audience" value={form.audience} onChange={v=>set('audience',v)} options={['all','students','alumni'].map(v=>({value:v,label:pretty(v)}))}/><div className="span-two"><Field label="Message" rows={3} value={form.body} onChange={v=>set('body',v)} required/></div></div><button className="primary-btn">Publish announcement <Megaphone size={15}/></button></form>}
-    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">COMMUNITY BULLETIN</span><h3>Recent announcements</h3></div></div>{items.length?items.map(item=><article className="announcement-item" key={item.id}><div className="announcement-symbol"><Megaphone size={18}/></div><div><div className="announcement-meta"><strong>{item.title}</strong><span>{pretty(item.audience)}</span></div><p>{item.body}</p><small>{item.author||'Institution'} · {dateTimeText(item.created_at)}</small></div></article>):<Empty title="No announcements" detail="Official institution updates will be published here."/>}</section>
+    <section className="panel"><div className="panel-heading"><div><span className="eyebrow">COMMUNITY BULLETIN</span><h3>Recent announcements</h3></div></div>{items.length?items.map(item=><article className="announcement-item" key={item.id}><div className="announcement-symbol"><Megaphone size={18}/></div><div><div className="announcement-meta"><strong>{item.title}</strong><span>{pretty(item.audience)}</span></div><p>{item.body}</p><small>{item.author||'Institution'} · {dateTimeText(item.created_at)}</small></div>{canPost&&<button className="text-link danger-link" onClick={()=>window.confirm('Delete this announcement?')&&run('/announcements/'+item.id,'DELETE')}>Delete</button>}</article>):<Empty title="No announcements" detail="Official institution updates will be published here."/>}</section>
   </div>;
 }
 function Notifications({items,run}) {
   const unreadCount = items.filter(x=>!x.is_read).length;
-  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">YOUR INBOX</span><h3>Recent activity</h3></div><div style={{display:'flex',gap:'8px',alignItems:'center'}}><span className="count-chip">{unreadCount} unread</span>{unreadCount>0&&<button className="outline-btn tiny" onClick={()=>run('/notifications/mark-all-read','PATCH',{})}>Mark all read</button>}</div></div>{items.length?items.map(item=><article className={'notification-row '+(!item.is_read?'unread':'')} key={item.id}><div className="notification-icon"><Bell size={17}/></div><div className="notification-content"><strong>{item.title}</strong><p>{item.body}</p><small>{dateTimeText(item.created_at)}</small></div>{!item.is_read&&<button className="outline-btn tiny" onClick={()=>run('/notifications/'+item.id+'/read','PATCH',{})}>Mark read</button>}</article>):<Empty title="You're all caught up" detail="New mentorship requests, applications and community updates will appear here."/>}</section>;
+  return <section className="panel"><div className="panel-heading"><div><span className="eyebrow">YOUR INBOX</span><h3>Recent activity</h3></div><div style={{display:'flex',gap:'8px',alignItems:'center'}}><span className="count-chip">{unreadCount} unread</span>{unreadCount>0&&<button className="outline-btn tiny" onClick={()=>run('/notifications/mark-all-read','PATCH',{})}>Mark all read</button>}</div></div>{items.length?items.map(item=><article className={'notification-row '+(!item.is_read?'unread':'')} key={item.id}><div className="notification-icon"><Bell size={17}/></div><div className="notification-content"><strong>{item.title}</strong><p>{item.body}</p><small>{dateTimeText(item.created_at)}</small></div>{!item.is_read&&<button className="outline-btn tiny" onClick={()=>run('/notifications/'+item.id+'/read','PATCH',{})}>Mark read</button>}<button className="text-link danger-link" onClick={()=>run('/notifications/'+item.id,'DELETE')}>Dismiss</button></article>):<Empty title="You're all caught up" detail="New mentorship requests, applications and community updates will appear here."/>}</section>;
 }
 function Profile({role,profile,setProfile,run}) {
   const set=(key,value)=>setProfile(old=>({...old,[key]:value}));
