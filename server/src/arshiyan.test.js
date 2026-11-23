@@ -122,6 +122,9 @@ async function runTests() {
   // 3. Admin CSV Export
   mockResponses.handler = (sql, values) => {
     if (sql.includes('SELECT u.name,u.email,p.graduation_year')) {
+      assert.ok(sql.includes('p.is_verified=TRUE'), 'CSV excludes unverified alumni');
+      assert.ok(sql.includes('p.is_public=TRUE'), 'CSV excludes private alumni profiles');
+      assert.ok(sql.includes("u.status='active'"), 'CSV excludes inactive alumni accounts');
       return {
         rows: [{ name: 'Test Alumni', email: 'alumni@test.com', graduation_year: 2022, department: 'CS', degree: 'B.Tech', company: 'Google', job_title: 'SWE', location: 'Pune', is_verified: true }]
       };
