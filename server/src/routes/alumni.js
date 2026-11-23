@@ -14,7 +14,7 @@ const safeCsv = value => {
 // GET /export/csv — export verified alumni directory to CSV (admin only)
 router.get('/export/csv', auth, roles('admin'), asyncRoute(async (_req, res) => {
   const rows = (await pool.query(
-    'SELECT u.name,u.email,p.graduation_year,p.department,p.degree,p.company,p.job_title,p.location,p.is_verified FROM users u JOIN alumni_profiles p ON p.user_id=u.id WHERE p.is_verified=TRUE AND p.is_public=TRUE AND u.status='active' ORDER BY p.graduation_year DESC,u.name'
+    'SELECT u.name,u.email,p.graduation_year,p.department,p.degree,p.company,p.job_title,p.location,p.is_verified FROM users u JOIN alumni_profiles p ON p.user_id=u.id WHERE p.is_verified=TRUE AND p.is_public=TRUE AND u.status=\'active\' ORDER BY p.graduation_year DESC,u.name'
   )).rows;
   const headers = ['Name', 'Email', 'Graduation Year', 'Department', 'Degree', 'Company', 'Job Title', 'Location', 'Verified'];
   const csv = [
